@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from motor_decision import (
     MotorDecisionMus, EstadisticasEstaticas,
-    calcular_peso_mano, calcular_factor_bayesiano,
     analizar_mano, calcular_prob_rival,
     E_EXTRA_PARES, E_EXTRA_JUEGO, VALORES_PARES, VALORES_JUEGO
 )
@@ -111,21 +110,23 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
         print(f"   Total:         {probs_juego['prob_menor'] + probs_juego['prob_empate']:.4f}")
     
     # ============================================================================
-    # 3. FACTOR BAYESIANO
+    # 3. PROBABILIDADES CONDICIONADAS DE RIVALES
     # ============================================================================
-    imprimir_subseccion("3. FACTOR BAYESIANO (Remoción de cartas)")
+    imprimir_subseccion("3. PROBABILIDADES CONDICIONADAS EXACTAS")
     
-    peso = calcular_peso_mano(mano)
-    factor_bayesiano = calcular_factor_bayesiano(peso)
+    mano_tuple = tuple(sorted(mano))
+    prob_rival_pares_cond = probs.get('prob_rival_pares_condicionada', 0.0)
+    prob_rival_juego_cond = probs.get('prob_rival_juego_condicionada', 0.0)
     
-    print(f"\n⚖️  Peso de la mano:")
-    print(f"   Rey (12): 4 pts, Caballo (11): 2.5 pts, As (1): 1.5 pts, Sota (10): 1 pt")
-    print(f"   Peso total: {peso:.2f} pts")
-    
-    print(f"\n📉 Factor Bayesiano:")
-    print(f"   Fórmula: 1.3 - (peso/16) * 0.6")
-    print(f"   Factor: {factor_bayesiano:.3f}")
-    print(f"   {'⬆️ Compañero más probable que tenga buenas cartas' if factor_bayesiano > 1.0 else '⬇️ Compañero menos probable que tenga buenas cartas'}")
+    print(f"\n🎯 Probabilidades de rivales (distribución hipergeométrica):")
+    print(f"   Dadas mis 4 cartas, quedan 36 cartas en el mazo.")
+    print(f"   Estas son las probabilidades EXACTAS de que AL MENOS 1 rival tenga la jugada:")
+    print(f"\n   P(rival tiene pares): {prob_rival_pares_cond:.4f} ({prob_rival_pares_cond:.2%})")
+    print(f"   P(rival tiene juego): {prob_rival_juego_cond:.4f} ({prob_rival_juego_cond:.2%})")
+    print(f"\n   ✅ Estas probabilidades consideran:")
+    print(f"      • Las 4 cartas que YO tengo (removidas del mazo)")
+    print(f"      • Las 36 cartas restantes disponibles")
+    print(f"      • Combinatoria exacta de manos posibles")
     
     # ============================================================================
     # 4. CÁLCULO DE EV - GRANDE (Lineal)
@@ -141,13 +142,12 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     print(f"\n👥 EV Soporte (Compañero):")
     P_comp_media_g = stats.estadisticas_generales['P_comp_media_grande']
     factor_ajuste_g = 1.0 + (0.3 * (1 - probs['prob_grande']))
-    P_comp_ajustado_g = min(P_comp_media_g * factor_ajuste_g * factor_bayesiano, 0.9)
+    P_comp_ajustado_g = min(P_comp_media_g * factor_ajuste_g, 0.9)
     ev_soporte_g = P_comp_ajustado_g * 1.0
     
     print(f"   🏆 P(compañero gana Grande): {P_comp_ajustado_g:.4f} ({P_comp_ajustado_g:.2%})")
     print(f"      P(comp media base): {P_comp_media_g:.4f}")
     print(f"      Factor ajuste (por mi debilidad): {factor_ajuste_g:.4f}")
-    print(f"      Factor Bayesiano: {factor_bayesiano:.4f}")
     print(f"   EV soporte = {P_comp_ajustado_g:.4f} × 1.0 = {ev_soporte_g:.4f}")
     
     ev_decision_g = ev_propio_g + (beta * ev_soporte_g)
@@ -169,7 +169,7 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     print(f"\n👥 EV Soporte (Compañero):")
     P_comp_media_c = stats.estadisticas_generales['P_comp_media_chica']
     factor_ajuste_c = 1.0 + (0.3 * (1 - probs['prob_chica']))
-    P_comp_ajustado_c = min(P_comp_media_c * factor_ajuste_c * factor_bayesiano, 0.9)
+    P_comp_ajustado_c = min(P_comp_media_c * factor_ajuste_c, 0.9)
     ev_soporte_c = P_comp_ajustado_c * 1.0
     
     print(f"   🏆 P(compañero gana Chica): {P_comp_ajustado_c:.4f} ({P_comp_ajustado_c:.2%})")
@@ -187,14 +187,11 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     # ============================================================================
     imprimir_subseccion("6. EV PARES (Lance Condicionado)")
     
-    P_RL_pares = calcular_prob_rival('pares', stats, mano)
-    print(f"\n🎯 Probabilidad de que AL MENOS un rival tenga pares:")
-    prob_individual_pares = stats.estadisticas_generales['prob_tener_pares']
-    print(f"   P(individual base): {prob_individual_pares:.4f}")
-    print(f"   Factor Bayesiano aplicado: {factor_bayesiano:.4f}")
-    p_individual_ajustado_pares = min(prob_individual_pares * factor_bayesiano, 0.95)
-    print(f"   P(individual ajustado): {p_individual_ajustado_pares:.4f}")
-    print(f"   P(al menos 1 de 2): 1 - (1 - {p_individual_ajustado_pares:.4f})² = {P_RL_pares:.4f}")
+    P_RL_pares = calcular_prob_rival('pares', mano, stats)
+    print(f"\n🎯 Probabilidad condicionada exacta de que AL MENOS un rival tenga pares:")
+    print(f"   P(al menos 1 rival tiene pares | mis 4 cartas): {P_RL_pares:.4f} ({P_RL_pares:.2%})")
+    print(f"   ✅ Valor precomputado usando distribución hipergeométrica")
+    print(f"      (36 cartas disponibles, considerando mis cartas removidas)")
     
     if analisis['tiene_pares']:
         print(f"\n📐 EV Propio (YO TENGO PARES):")
@@ -231,14 +228,13 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     
     print(f"\n👥 EV Soporte (Compañero):")
     W_comp_pares = 1.5
-    prob_comp_tiene_pares = prob_individual_pares
+    prob_comp_tiene_pares = stats.estadisticas_generales['prob_tener_pares']
     factor_reduccion = 0.5 if analisis['tiene_pares'] else 1.0
-    prob_comp_gana_pares = prob_comp_tiene_pares * factor_bayesiano * 0.6
+    prob_comp_gana_pares = prob_comp_tiene_pares * 0.6
     ev_soporte_p = factor_reduccion * prob_comp_gana_pares * (W_comp_pares + E_EXTRA_PARES)
     
     print(f"   🏆 P(compañero gana Pares): {prob_comp_gana_pares:.4f} ({prob_comp_gana_pares:.2%})")
     print(f"      P(comp tiene pares): {prob_comp_tiene_pares:.4f}")
-    print(f"      Factor Bayesiano: {factor_bayesiano:.4f}")
     print(f"      Factor reducción: {factor_reduccion} {'(ya tengo pares)' if analisis['tiene_pares'] else ''}")
     print(f"   EV soporte = {factor_reduccion} × {prob_comp_gana_pares:.4f} × {W_comp_pares + E_EXTRA_PARES} = {ev_soporte_p:.4f}")
     
@@ -252,14 +248,11 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     # ============================================================================
     imprimir_subseccion("7. EV JUEGO (Lance Condicionado)")
     
-    P_RL_juego = calcular_prob_rival('juego', stats, mano)
-    print(f"\n🎯 Probabilidad de que AL MENOS un rival tenga juego:")
-    prob_individual_juego = stats.estadisticas_generales['prob_tener_juego']
-    print(f"   P(individual base): {prob_individual_juego:.4f}")
-    print(f"   Factor Bayesiano aplicado: {factor_bayesiano:.4f}")
-    p_individual_ajustado_juego = min(prob_individual_juego * factor_bayesiano, 0.95)
-    print(f"   P(individual ajustado): {p_individual_ajustado_juego:.4f}")
-    print(f"   P(al menos 1 de 2): 1 - (1 - {p_individual_ajustado_juego:.4f})² = {P_RL_juego:.4f}")
+    P_RL_juego = calcular_prob_rival('juego', mano, stats)
+    print(f"\n🎯 Probabilidad condicionada exacta de que AL MENOS un rival tenga juego:")
+    print(f"   P(al menos 1 rival tiene juego | mis 4 cartas): {P_RL_juego:.4f} ({P_RL_juego:.2%})")
+    print(f"   ✅ Valor precomputado usando distribución hipergeométrica")
+    print(f"      (36 cartas disponibles, considerando mis cartas removidas)")
     
     if analisis['tiene_juego']:
         print(f"\n📐 EV Propio (YO TENGO JUEGO):")
@@ -296,14 +289,13 @@ def analizar_mano_completo(mano, posicion=1, modo_8_reyes=True, perfil='normal',
     
     print(f"\n👥 EV Soporte (Compañero):")
     W_comp_juego = 2.0
-    prob_comp_tiene_juego = prob_individual_juego
+    prob_comp_tiene_juego = stats.estadisticas_generales['prob_tener_juego']
     factor_reduccion_j = 0.5 if analisis['tiene_juego'] else 1.0
-    prob_comp_gana_juego = prob_comp_tiene_juego * factor_bayesiano * 0.6
+    prob_comp_gana_juego = prob_comp_tiene_juego * 0.6
     ev_soporte_j = factor_reduccion_j * prob_comp_gana_juego * (W_comp_juego + E_EXTRA_JUEGO)
     
     print(f"   🏆 P(compañero gana Juego): {prob_comp_gana_juego:.4f} ({prob_comp_gana_juego:.2%})")
     print(f"      P(comp tiene juego): {prob_comp_tiene_juego:.4f}")
-    print(f"      Factor Bayesiano: {factor_bayesiano:.4f}")
     print(f"      Factor reducción: {factor_reduccion_j} {'(ya tengo juego)' if analisis['tiene_juego'] else ''}")
     print(f"   EV soporte = {factor_reduccion_j} × {prob_comp_gana_juego:.4f} × {W_comp_juego + E_EXTRA_JUEGO} = {ev_soporte_j:.4f}")
     

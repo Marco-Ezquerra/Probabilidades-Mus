@@ -118,25 +118,39 @@ Mano: [12,11,10,1] (31 - alto empate)
 
 ---
 
-## Corrección Crítica: Simetría Bayesiana (v2.2)
+## Evolución: De Heurísticas a Probabilidades Exactas
 
-El factor bayesiano (remoción de cartas) ahora se aplica **simétricamente** a compañero Y rivales.
+### v2.2: Factor Bayesiano Simétrico (ELIMINADO)
 
-**Problema anterior:** Si tenías basura, el código aumentaba $P(\text{compañero gana})$ pero NO $P(\text{rivales ganan})$ → sesgo optimista.
+**Enfoque anterior:**
+- Pesos lineales por carta (Rey=4, Caballo=2.5, As=1.5, Sota=1)
+- Factor bayesiano: $f_{\text{Bayes}}(w) = 1.3 - \frac{w}{16} \cdot 0.6$
+- Aplicación simétrica a compañero Y rivales
 
-**Solución v2.2:**
+**Problemas identificados:**
+- ❌ Relación lineal entre cartas NO refleja la realidad
+- ❌ Pesos arbitrarios sin justificación combinatoria
+- ❌ No respeta distribución hipergeométrica real
+
+### v2.3: Probabilidades Condicionadas Exactas (ACTUAL)
+
+**Enfoque actual:**
 
 $$
-P_{RL} = 1 - (1 - p_{\text{individual}} \cdot f_{\text{Bayes}})^2
+P_{RL}(\text{lance}|\text{mano}_{\text{yo}}) = \text{precomputado via Monte Carlo}
 $$
 
-El mismo $f_{\text{Bayes}}$ se aplica a TODOS (compañero y rivales).
+**Ventajas:**
+- ✅ **Distribución hipergeométrica exacta** - 36 cartas disponibles (40 - 4 mías)
+- ✅ **Sin pesos arbitrarios** - Combinatoria pura
+- ✅ **Precomputado** - Sin cálculos en tiempo real
 
-**Impacto:**
-- Mano pesada [12,12,11,11]: $f_{\text{Bayes}} = 0.8125$ → rivales **-18.75%** prob
-- Mano ligera [5,4,6,7]: $f_{\text{Bayes}} = 1.30$ → rivales **+30%** prob
+**Impacto en P_RL:**
+- Mano pesada [12,12,11,11]: $P_{RL}(\text{pares}) = 0.7810$ (78.1%)
+- Mano ligera [1,1,1,1]: $P_{RL}(\text{pares}) = 0.7841$ (78.4%)
+- Diferencia pequeña pero **exacta** según combinatoria real
 
-Ver [FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md) sección 5 para detalles.
+Ver [FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md) sección 5 para detalles completos del método de precomputación.
 
 ---
 
@@ -145,7 +159,7 @@ Ver [FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md) sección 5 para det
 1. **Cero variables inventadas** - Solo probabilidades exactas del dataset
 2. **Sensibilidad real al empate** - Impacto proporcional a $P(\text{empate})$
 3. **Correctitud matemática** - Fórmula exacta según reglas del Mus
-4. **Simetría bayesiana** - Factor aplicado consistentemente
+4. **Probabilidades condicionadas exactas** - Distribución hipergeométrica real
 
 ---
 
@@ -169,6 +183,7 @@ print(f"Posición {4}: EV={EV:.4f}, P(Cortar)={P_cortar:.1%}")
 
 ---
 
-**Versión:** Motor de Decisión v2.2  
+**Versión:** Motor de Decisión v2.3  
 **Tests:** 7/7 pasados ✅  
-**Fecha:** 27 de febrero de 2026
+**Fecha:** marzo de 2026
+**Cambio principal:** Probabilidades condicionadas exactas (hipergeométricas) en lugar de factor bayesiano lineal

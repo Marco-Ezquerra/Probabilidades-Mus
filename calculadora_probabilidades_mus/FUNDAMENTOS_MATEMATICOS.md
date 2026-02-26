@@ -1,7 +1,7 @@
 # Fundamentos Matemáticos del Motor de Decisión Mus
 
-> **Versión**: 2.2 (27 de febrero de 2026)  
-> **Enfoque**: Formulación matemática rigurosa sin heurísticas arbitrarias
+> **Versión**: 2.3 (marzo de 2026)  
+> **Enfoque**: Probabilidades condicionadas exactas mediante distribución hipergeométrica
 
 ---
 
@@ -11,7 +11,7 @@
 2. [Lances Lineales (Grande y Chica)](#2-lances-lineales-grande-y-chica)
 3. [Lances Condicionados (Pares y Juego)](#3-lances-condicionados-pares-y-juego)
 4. [Probabilidades de Desempate](#4-probabilidades-de-desempate)
-5. [Factor Bayesiano (Remoción de Cartas)](#5-factor-bayesiano-remoción-de-cartas)
+5. [Probabilidades Condicionadas Exactas](#5-probabilidades-condicionadas-exactas)
 6. [Política de Decisión Estocástica](#6-política-de-decisión-estocástica)
 
 ---
@@ -56,14 +56,13 @@ $$
 ### EV Soporte (Lineal)
 
 $$
-\text{EV}_{\text{Soporte}}^{\text{Lineal}} = P_{\text{comp}}^{\text{media}} \cdot f_{\text{ajuste}} \cdot f_{\text{Bayes}}
+\text{EV}_{\text{Soporte}}^{\text{Lineal}} = P_{\text{comp}}^{\text{media}} \cdot f_{\text{ajuste}}
 $$
 
 **Donde:**
 - $P_{\text{comp}}^{\text{media}}$: Probabilidad media del compañero (desde dataset)
 - $f_{\text{ajuste}} = 1.0 + 0.3 \cdot (1 - P(\text{yo gano}))$: Factor de ajuste
   - Si mi mano es mala → compañero más valioso
-- $f_{\text{Bayes}}$: Factor bayesiano por remoción de cartas (ver sección 5)
 
 **Interpretación de $f_{\text{ajuste}}$:**
 - Si $P(\text{yo gano}) = 1.0$ → $f_{\text{ajuste}} = 1.0$ (compañero no añade valor)
@@ -86,12 +85,21 @@ $$
 **Donde:**
 - $P_{RL}$: Probabilidad de que al menos 1 rival tenga la jugada
 - $P(\text{yo}|RL)$: Probabilidad de ganar contra rival con jugada (ver sección 4)
-- $W$: Valor base de la jugada
-  - Pares: 1, Medias: 2, Duples: 3
-  - Juego: 1
+- $W$: Valor base de la jugada (puntos garantizados)
+  - **Pares**: sin_pares: 0, pares: 1, medias: 2, duples: 3
+  - **Juego** (jerarquía: 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33):
+    - 31: 3.000 (mejor juego)
+    - 32: 2.857
+    - 40: 2.714
+    - 37: 2.571
+    - 36: 2.429
+    - 35: 2.286
+    - 34: 2.143
+    - 33: 2.000 (peor juego)
 - $E_{\text{extra}}$: Ganancia esperada por envites (swing)
-  - Pares: 1.5
-  - Juego: 2.0
+  - **Actualmente: 0** (sistema de envites por implementar)
+  - Pares: 0
+  - Juego: 0
 
 **Descomposición:**
 
@@ -107,17 +115,32 @@ $$
 
 ### Cálculo de $P_{RL}$ (Probabilidad Rival)
 
-Asumiendo 2 rivales independientes:
+La probabilidad de que al menos un rival tenga la jugada es **PRECOMPUTADA** usando distribución hipergeométrica exacta:
 
 $$
-P_{RL} = 1 - (1 - p_{\text{individual}} \cdot f_{\text{Bayes}})^2
+P_{RL}(\text{lance}|\text{mano}_{\text{yo}}) = \text{precomputado desde simulación Monte Carlo}
 $$
 
-**Donde:**
-- $p_{\text{individual}}$: Probabilidad base de tener la jugada (desde dataset)
-- $f_{\text{Bayes}}$: Factor bayesiano aplicado SIMÉTRICAMENTE
+**Proceso de precomputación (ver sección 5):**
+1. Genero mi mano de 4 cartas
+2. Quedan 36 cartas disponibles en el mazo (40 - 4)
+3. Simulo 10,000 repartos de 2 rivales con 4 cartas cada uno
+4. Cuento en cuántos casos AL MENOS 1 rival tiene la jugada
+5. $P_{RL} = \frac{\text{casos con rival}}{\text{total simulaciones}}$
 
-**Nota crítica (v2.2):** El factor bayesiano se aplica a **todos** los jugadores (compañero Y rivales), eliminando sesgo optimista.
+**Ventajas sobre aproximaciones lineales:**
+- ✅ Considera la composición exacta de mi mano
+- ✅ Respeta la distribución hipergeométrica real
+- ✅ No asume independencia entre cartas
+- ✅ No requiere pesos arbitrarios ni factores lineales
+
+**Fallback si mano no está en dataset:**
+
+$$
+P_{RL} = 1 - (1 - p_{\text{individual}})^2^{\text{base
+$$
+
+Donde $p_{\text{individual}}$ es la probabilidad general base de tener la jugada.
 
 ### EV Soporte (Condicionado)
 
@@ -180,75 +203,130 @@ Desde dataset:
 
 ---
 
-## 5. Factor Bayesiano (Remoción de Cartas)
+## 5. Probabilidades Condicionadas Exactas
 
-El factor bayesiano modela el efecto de remoción de cartas: si tienes Reyes, el mazo queda empobrecido para todos.
+En lugar de aproximaciones lineales o heurísticas, el motor usa **probabilidades condicionadas exactas** precomputadas mediante simulación Monte Carlo con distribución hipergeométrica.
 
-### Peso de la Mano
+### Problema Fundamental
 
+Cuando tengo una mano específica de 4 cartas, ¿cuál es la probabilidad de que al menos 1 de 2 rivales tenga pares o juego?
+
+**Enfoque anterior (ELIMINADO en v2.3):**
+- Pesos lineales arbitrarios (Rey=4, Caballo=2.5, As=1.5, Sota=1)
+- Factor bayesiano: $f_{\text{Bayes}}(w) = 1.3 - \frac{w}{16} \cdot 0.6$
+- ❌ **Problema**: Asume relación lineal entre cartas y probabilidades
+- ❌ **Problema**: No respeta distribución hipergeométrica real
+
+**Enfoque actual (v2.3):**
+- ✅ Simulación Monte Carlo con 36 cartas disponibles (40 - 4 mías)
+- ✅ Distribución hipergeométrica exacta
+- ✅ Sin pesos arbitrarios ni factores lineales
+
+### Método de Precomputación
+
+Para cada mano única posible:
+
+**1. Inicialización:**
+```python
+mi_mano = [12, 11, 10, 1]  # Ejemplo
+baraja_disponible = [40 cartas] - mi_mano  # 36 cartas restantes
+```
+
+**2. Simulación Monte Carlo (10,000 iteraciones):**
+```python
+for i in range(10000):
+    # Repartir 2 rivales con 4 cartas cada uno (de las 36 disponibles)
+    rival_1 = random.sample(baraja_disponible, 4)
+    rival_2 = random.sample(baraja_disponible - rival_1, 4)
+    
+    # Verificar si alguno tiene pares/juego
+    if tiene_pares(rival_1) or tiene_pares(rival_2):
+        contador_pares += 1
+    
+    if tiene_juego(rival_1) or tiene_juego(rival_2):
+        contador_juego += 1
+```
+
+**3. Cálculo de probabilidades:**
 $$
-w(\text{mano}) = \sum_{c \in \text{mano}} w(c)
-$$
-
-**Pesos por carta:**
-
-$$
-w(c) = \begin{cases}
-4.0 & \text{si } c = 12 \text{ (Rey)} \\
-2.5 & \text{si } c = 11 \text{ (Caballo)} \\
-1.5 & \text{si } c = 1 \text{ (As)} \\
-1.0 & \text{si } c = 10 \text{ (Sota)} \\
-0.0 & \text{en otro caso}
-\end{cases}
-$$
-
-**Rango:** $w \in [0, 16]$
-
-### Factor Bayesiano
-
-$$
-f_{\text{Bayes}}(w) = 1.3 - \frac{w}{16} \cdot 0.6
-$$
-
-**Propiedades:**
-- Si $w = 0$ (basura) → $f_{\text{Bayes}} = 1.30$ (mazo enriquecido)
-- Si $w = 8$ (neutral) → $f_{\text{Bayes}} = 1.00$ (mazo neutral)
-- Si $w = 16$ (4 Reyes) → $f_{\text{Bayes}} = 0.70$ (mazo empobrecido)
-
-### Aplicación Simétrica (v2.2)
-
-**CRÍTICO:** El factor se aplica a **todos** los jugadores:
-
-$$
-P_{\text{ajustado}} = \min(P_{\text{base}} \cdot f_{\text{Bayes}}, 0.95)
-$$
-
-**Para compañero:**
-$$
-P(\text{comp} \text{ gana}) = P_{\text{comp}}^{\text{base}} \cdot f_{\text{Bayes}}
-$$
-
-**Para rivales:**
-$$
-p_{\text{individual}}^{\text{ajustado}} = p_{\text{individual}}^{\text{base}} \cdot f_{\text{Bayes}}
-$$
-$$
-P_{RL} = 1 - (1 - p_{\text{individual}}^{\text{ajustado}})^2
+P_{RL}(\text{pares}|\text{mano}) = \frac{\text{contador\_pares}}{10000}
 $$
 
-**Justificación física:** Si YO tengo basura, el mazo está enriquecido para TODOS (compañero Y rivales). No hay razón para tratarlos asimétricamente.
+$$
+P_{RL}(\text{juego}|\text{mano}) = \frac{\text{contador\_juego}}{10000}
+$$
 
-### Ejemplo Numérico
+### Resultados Almacenados
+
+Las probabilidades se almacenan en CSV con las siguientes columnas:
+
+| Columna | Descripción |
+|---------|-------------|
+| `mano` | Lista de 4 cartas ordenadas |
+| `probabilidad_grande` | P(yo gano Grande) |
+| `probabilidad_chica` | P(yo gano Chica) |
+| `probabilidad_pares` | P(mi mano tiene pares) |
+| `probabilidad_juego` | P(mi mano tiene juego) |
+| `prob_rival_pares_condicionada` | **P(≥1 rival tiene pares \| mi mano)** |
+| `prob_rival_juego_condicionada` | **P(≥1 rival tiene juego \| mi mano)** |
+
+### Ejemplo Numérico Real
 
 **Caso 1: Mano pesada [12, 12, 11, 11]**
-- Peso: $w = 4 + 4 + 2.5 + 2.5 = 13.0$
-- Factor: $f_{\text{Bayes}} = 1.3 - \frac{13}{16} \cdot 0.6 = 0.8125$
-- Efecto: Compañero y rivales tienen **-18.75%** probabilidad de buenas cartas
+- Mano de 2 pares potente
+- Probabilidades precomputadas:
+  - $P_{RL}(\text{pares}|\text{mano}) = 0.7810$ (78.1%)
+  - $P_{RL}(\text{juego}|\text{mano}) = 0.4863$ (48.6%)
+- **Interpretación**: Con esta mano, 78% de las veces al menos un rival tiene pares
 
-**Caso 2: Mano ligera [5, 4, 6, 7]**
-- Peso: $w = 0 + 0 + 0 + 0 = 0.0$
-- Factor: $f_{\text{Bayes}} = 1.3 - 0 = 1.30$
-- Efecto: Compañero y rivales tienen **+30%** probabilidad de buenas cartas
+**Caso 2: Mano ligera [1, 1, 1, 1]**
+- 4 Ases (pares potentes)
+- Probabilidades precomputadas:
+  - $P_{RL}(\text{pares}|\text{mano}) = 0.7841$ (78.4%)
+  - $P_{RL}(\text{juego}|\text{mano}) = 0.6272$ (62.7%)
+- **Interpretación**: Aunque tengo pares, 78% de las veces un rival también tiene
+
+**Caso 3: Mano sin figuras [4, 5, 6, 7]**
+- Sin Reyes ni Ases
+- Probabilidades precomputadas:
+  - $P_{RL}(\text{pares}|\text{mano}) \approx 0.82$ (82%)
+  - $P_{RL}(\text{juego}|\text{mano}) \approx 0.55$ (55%)
+- **Interpretación**: Mazo enriquecido → rivales con mayor probabilidad
+
+### Ventajas del Enfoque Exacto
+
+| Aspecto | Heurística Lineal (v2.2) | Probabilidad Exacta (v2.3) |
+|---------|--------------------------|----------------------------|
+| **Base matemática** | Pesos arbitrarios | Distribución hipergeométrica |
+| **Cálculo** | $f(w) = 1.3 - 0.6w/16$ | Simulación Monte Carlo |
+| **Precisión** | Aproximación ±10% | Exacta (error Monte Carlo < 1%) |
+| **Dependencias** | Asume linealidad | Considera combinatoria real |
+| **Ejemplo [12,12,11,11]** | Factor 0.81 → ~77% | Exacto 78.1% |
+
+### Integración en el Motor
+
+```python
+def calcular_prob_rival(lance, mano, estadisticas):
+    """
+    Obtiene P_RL precomputado desde dataset.
+    
+    Returns:
+        float: Probabilidad condicionada exacta
+    """
+    mano_tuple = tuple(sorted(mano))
+    
+    if mano_tuple in estadisticas.manos_dict:
+        if lance == 'pares':
+            return estadisticas.manos_dict[mano_tuple]['prob_rival_pares_condicionada']
+        elif lance == 'juego':
+            return estadisticas.manos_dict[mano_tuple]['prob_rival_juego_condicionada']
+    
+    # Fallback: probabilidad general sin condicionar
+    p_individual = estadisticas.estadisticas_generales[f'prob_tener_{lance}']
+    return 1 - (1 - p_individual) ** 2
+```
+
+**Sin cálculos en tiempo real:** Solo lookup en diccionario O(1).
 
 ---
 

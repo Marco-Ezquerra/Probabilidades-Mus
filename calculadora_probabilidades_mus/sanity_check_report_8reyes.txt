@@ -1,0 +1,34 @@
+================================================================================
+SANITY CHECK - VERIFICACIÓN DE CORDURA DEL MODELO EV
+================================================================================
+
+Modo: 8reyes
+Perfil: normal
+Fecha: 26 febrero 2026
+Total manos únicas: 330
+
+RESULTADOS DE VERIFICACIONES:
+--------------------------------------------------------------------------------
+
+1. Posición 1 siempre mayor o igual:
+   ✓ Verificado: True
+
+2. Correlaciones entre posiciones:
+   pos1_pos2: 0.9997
+   pos1_pos3: 0.9997
+   pos1_pos4: 0.9986
+   pos2_pos4: 0.9996
+
+3. Diferencias pos1 - pos4:
+   Media: 0.0866
+   Std: 0.0906
+   Max: 0.3744
+
+4. Coherencia de rankings:
+   Juego 31 en top 20: 8/20
+   Sin jugadas en bottom 20: 11/20
+
+CONCLUSIÓN:
+--------------------------------------------------------------------------------
+✗ ALGUNAS VERIFICACIONES FALLARON
+  Revisar el modelo antes de hacer simulaciones masivas.

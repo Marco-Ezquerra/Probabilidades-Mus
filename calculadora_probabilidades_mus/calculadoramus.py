@@ -172,6 +172,8 @@ def comparar_punto(punto1, punto2, es_mano):
 def simular_mano(mano, baraja_original, iteraciones=10000):
     """
     Simula una mano contra manos aleatorias y calcula probabilidades.
+    NUEVO: También calcula probabilidades condicionadas exactas de que un rival
+    tenga pares/juego dado que yo tengo estas 4 cartas (distribución hipergeométrica).
     
     Args:
         mano: Lista de 4 cartas que representan la mano a simular
@@ -179,15 +181,19 @@ def simular_mano(mano, baraja_original, iteraciones=10000):
         iteraciones: Número de simulaciones Monte Carlo
     
     Returns:
-        Diccionario con las probabilidades de victoria en cada lance
+        Diccionario con las probabilidades de victoria en cada lance + 
+        probabilidades condicionadas de rivales
     """
-    # Preparar baraja sin las cartas de la mano
+    # Preparar baraja sin las cartas de la mano (36 cartas restantes)
     baraja_disponible = baraja_original.copy()
     for carta in mano:
         baraja_disponible.remove(carta)
     
     # Contadores de victorias
     victorias = {"grande": 0, "chica": 0, "pares": 0, "juego": 0}
+    # Contadores para probabilidades condicionadas de rivales
+    rival_tiene_pares = 0
+    rival_tiene_juego = 0
     es_mano = True
     
     for _ in range(iteraciones):
@@ -221,6 +227,10 @@ def simular_mano(mano, baraja_original, iteraciones=10000):
         tipo_mano1, val1_m1, val2_m1 = clasificar_pares(mano1)
         tipo_mano2, val1_m2, val2_m2 = clasificar_pares(mano2)
         
+        # Contar si el rival tiene pares (cualquiera de los dos rivales)
+        if tipo_mano1 != "sin_pares" or tipo_mano2 != "sin_pares":
+            rival_tiene_pares += 1
+        
         if (comparar_pares(tipo_mano, val1, val2, tipo_mano1, val1_m1, val2_m1, es_mano) > 0 and
             comparar_pares(tipo_mano, val1, val2, tipo_mano2, val1_m2, val2_m2, es_mano) > 0):
             victorias["pares"] += 1
@@ -229,6 +239,10 @@ def simular_mano(mano, baraja_original, iteraciones=10000):
         valor_juego = convertir_valor_juego(calcular_valor_juego(mano))
         valor_juego1 = convertir_valor_juego(calcular_valor_juego(mano1))
         valor_juego2 = convertir_valor_juego(calcular_valor_juego(mano2))
+        
+        # Contar si el rival tiene juego (cualquiera de los dos rivales)
+        if valor_juego1 > 0 or valor_juego2 > 0:
+            rival_tiene_juego += 1
         
         if valor_juego > 0 or valor_juego1 > 0 or valor_juego2 > 0:
             # Hay juego
@@ -251,7 +265,12 @@ def simular_mano(mano, baraja_original, iteraciones=10000):
         "probabilidad_grande": victorias["grande"] / iteraciones,
         "probabilidad_chica": victorias["chica"] / iteraciones,
         "probabilidad_pares": victorias["pares"] / iteraciones,
-        "probabilidad_juego": victorias["juego"] / iteraciones
+        "probabilidad_juego": victorias["juego"] / iteraciones,
+        # NUEVO: Probabilidades condicionadas exactas de rivales
+        # Prob de que AL MENOS 1 de los 2 rivales tenga la jugada
+        # (dadas las 36 cartas restantes tras ver mi mano)
+        "prob_rival_pares_condicionada": rival_tiene_pares / iteraciones,
+        "prob_rival_juego_condicionada": rival_tiene_juego / iteraciones
     }
 
 

@@ -5,13 +5,18 @@ Implementa un agente IA que decide "Cortar" o dar "Mus" basándose en:
 - Soporte estadístico del compañero (desconocido)
 - Política de decisión estocástica (sigmoide) para evitar ser explotable
 
-Versión: 2.2
-Última actualización: 27/02/2026
+Versión: 2.3
+Última actualización: marzo 2026
+
+Cambios v2.3:
+- CRÍTICO: Eliminado factor bayesiano heurístico (pesos lineales Rey=4, As=1.5, etc.)
+- Implementadas probabilidades condicionadas EXACTAS (distribución hipergeométrica)
+- calcular_prob_rival() ahora usa probabilidades precomputadas desde dataset
+- Precomputación: prob_rival_pares_condicionada y prob_rival_juego_condicionada
+- Eliminadas funciones: calcular_peso_mano() y calcular_factor_bayesiano()
 
 Cambios v2.2:
-- CRÍTICO: Factor bayesiano ahora se aplica simétricamente a rivales Y compañero
-- Corrección de asimetría que causaba sesgo optimista en manos débiles
-- calcular_prob_rival() ahora acepta parámetro 'mano' y aplica factor_bayesiano
+- Aplicación simétrica del factor bayesiano (OBSOLETO en v2.3)
 
 Cambios v2.1:
 - Desempates exactos: prob_menor + prob_empate × factor_posición
@@ -44,21 +49,25 @@ VALORES_PARES = {
     "duples": 3
 }
 
-# Valores de juego según puntuación
+# Valores de juego según jerarquía del Mus
+# Jerarquía: 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33
+# Pesos normalizados: 31=3.0 (mejor), 33=2.0 (peor juego)
+# Fórmula: W = 2.0 + (jerarquía - 1) * (1.0 / 7)
 VALORES_JUEGO = {
-    31: 3,  # El mejor juego
-    32: 2.5,
-    33: 2,
-    34: 1.8,
-    35: 1.6,
-    36: 1.4,
-    37: 1.2,
-    40: 1.0  # Juego, pero no el mejor
+    31: 3.0,      # Jerarquía 8 (mejor) 
+    32: 2.857,    # Jerarquía 7
+    40: 2.714,    # Jerarquía 6
+    37: 2.571,    # Jerarquía 5
+    36: 2.429,    # Jerarquía 4
+    35: 2.286,    # Jerarquía 3
+    34: 2.143,    # Jerarquía 2
+    33: 2.0       # Jerarquía 1 (peor juego)
 }
 
 # Esperanza de puntos extra en envites (Swing)
-E_EXTRA_PARES = 1.5
-E_EXTRA_JUEGO = 2.0
+# NOTA: Actualmente 0.0, se implementará sistema de envites en futuro
+E_EXTRA_PARES = 0.0
+E_EXTRA_JUEGO = 0.0
 
 # Perfiles predefinidos
 PERFILES = {
@@ -109,7 +118,10 @@ class EstadisticasEstaticas:
                 'prob_grande': row['probabilidad_grande'],
                 'prob_chica': row['probabilidad_chica'],
                 'prob_pares': row['probabilidad_pares'],
-                'prob_juego': row['probabilidad_juego']
+                'prob_juego': row['probabilidad_juego'],
+                # NUEVO: Probabilidades condicionadas exactas de rivales
+                'prob_rival_pares_condicionada': row.get('prob_rival_pares_condicionada', 0.0),
+                'prob_rival_juego_condicionada': row.get('prob_rival_juego_condicionada', 0.0)
             }
         
         # Calcular estadísticas generales (para compañero desconocido)
@@ -273,58 +285,6 @@ class EstadisticasEstaticas:
 
 
 # ============================================================================
-# PESO DE MANO Y FACTOR BAYESIANO
-# ============================================================================
-
-def calcular_peso_mano(mano):
-    """
-    Calcula el peso de una mano sumando los valores de las cartas.
-    12 (Rey) = 4pts, 11 (Caballo) = 2.5pts, 1 (As) = 1.5pts, 10 = 1pts, resto = 0pts
-    
-    Args:
-        mano: Lista de 4 cartas
-    
-    Returns:
-        peso: float, suma de puntos
-    """
-    pesos_carta = {
-        12: 4.0,
-        11: 2.5,
-        1: 1.5,
-        10: 1.0
-    }
-    
-    peso = sum(pesos_carta.get(carta, 0.0) for carta in mano)
-    return peso
-
-
-def calcular_factor_bayesiano(peso_mano):
-    """
-    Calcula el factor de ajuste bayesiano basado en el efecto de remoción de cartas.
-    Mano pesada (muchas cartas altas) → factor < 1 (compañero menos probable que tenga buenas cartas)
-    Mano ligera (pocas cartas altas) → factor > 1 (compañero más probable que tenga buenas cartas)
-    
-    Args:
-        peso_mano: float, peso de la mano [0, 16]
-    
-    Returns:
-        factor: float, [0.7, 1.3]
-    """
-    # Peso máximo posible: 4 Reyes = 16 pts
-    # Peso mínimo relevante: 0 pts
-    # Transformación lineal: peso 0 → factor 1.3, peso 16 → factor 0.7
-    peso_max = 16.0
-    factor_max = 1.3
-    factor_min = 0.7
-    
-    # Interpolación lineal inversa
-    factor = factor_max - (peso_mano / peso_max) * (factor_max - factor_min)
-    
-    # Asegurar rango [0.7, 1.3]
-    return max(factor_min, min(factor_max, factor))
-
-
-# ============================================================================
 # ANÁLISIS DE MANO
 # ============================================================================
 
@@ -364,35 +324,41 @@ def analizar_mano(mano):
 # CÁLCULO DE PROBABILIDAD DE RIVAL (P_RL)
 # ============================================================================
 
-def calcular_prob_rival(lance, estadisticas, mano):
+def calcular_prob_rival(lance, mano, estadisticas):
     """
     Estima la probabilidad de que AL MENOS uno de los 2 rivales tenga la jugada.
-    Aplica factor bayesiano por remoción de cartas.
+    NUEVO: Usa probabilidades condicionadas exactas precomputadas (distribución hipergeométrica)
+    en lugar de factor bayesiano heurístico.
     
     Args:
         lance: 'pares' o 'juego'
+        mano: Lista de 4 cartas (para buscar probabilidad condicionada exacta)
         estadisticas: EstadisticasEstaticas
-        mano: Lista de 4 cartas (para calcular factor bayesiano)
     
     Returns:
         P_RL: float (probabilidad de que al menos 1 rival tenga la jugada)
     """
-    if lance == 'pares':
-        p_individual = estadisticas.estadisticas_generales['prob_tener_pares']
-    elif lance == 'juego':
-        p_individual = estadisticas.estadisticas_generales['prob_tener_juego']
+    mano_tuple = tuple(sorted(mano))
+    
+    # Extraer probabilidad EXACTA condicionada de que AL MENOS 1 rival tenga la jugada
+    # (ya precomputada considerando las 36 cartas restantes tras ver mi mano)
+    if mano_tuple in estadisticas.manos_dict:
+        if lance == 'pares':
+            P_RL = estadisticas.manos_dict[mano_tuple]['prob_rival_pares_condicionada']
+        elif lance == 'juego':
+            P_RL = estadisticas.manos_dict[mano_tuple]['prob_rival_juego_condicionada']
+        else:
+            return 0.0
     else:
-        return 0.0
-    
-    # Aplicar factor bayesiano: si yo tengo basura, el mazo está enriquecido
-    # para TODOS (compañero Y rivales)
-    peso = calcular_peso_mano(mano)
-    factor_bayesiano = calcular_factor_bayesiano(peso)
-    p_individual_ajustado = min(p_individual * factor_bayesiano, 0.95)
-    
-    # Probabilidad de que AL MENOS uno de los 2 rivales tenga la jugada
-    # P(al menos 1) = 1 - P(ninguno) = 1 - (1-p)^2
-    P_RL = 1 - (1 - p_individual_ajustado) ** 2
+        # Fallback: si no está precomputada, usar probabilidad general
+        if lance == 'pares':
+            p_individual = estadisticas.estadisticas_generales['prob_tener_pares']
+        elif lance == 'juego':
+            p_individual = estadisticas.estadisticas_generales['prob_tener_juego']
+        else:
+            return 0.0
+        # P(al menos 1 de 2) = 1 - P(ninguno)
+        P_RL = 1 - (1 - p_individual) ** 2
     
     return P_RL
 
@@ -470,7 +436,6 @@ def calcular_ev_propio_condicionado(mano, W_yo, P_RL, E_extra, lance, estadistic
 def calcular_ev_soporte_lineal(mano, prob_yo, estadisticas, lance):
     """
     Calcula EV de soporte del compañero para lances lineales.
-    Usa factor bayesiano de remoción de cartas.
     
     Args:
         mano: Lista de 4 cartas
@@ -490,11 +455,7 @@ def calcular_ev_soporte_lineal(mano, prob_yo, estadisticas, lance):
     # tiene mayor probabilidad de compensar
     factor_ajuste = 1.0 + (0.3 * (1 - prob_yo))
     
-    # Factor bayesiano por remoción de cartas
-    peso = calcular_peso_mano(mano)
-    factor_bayesiano = calcular_factor_bayesiano(peso)
-    
-    P_comp_ajustado = min(P_comp_media * factor_ajuste * factor_bayesiano, 0.9)
+    P_comp_ajustado = min(P_comp_media * factor_ajuste, 0.9)
     
     return P_comp_ajustado * 1.0  # 1 punto base
 
@@ -502,7 +463,6 @@ def calcular_ev_soporte_lineal(mano, prob_yo, estadisticas, lance):
 def calcular_ev_soporte_condicionado(mano, tiene_jugada_yo, estadisticas, lance, E_extra):
     """
     Calcula EV de soporte del compañero para lances condicionados.
-    Aplica factor bayesiano y elimina descuento artificial en E_extra.
     
     Args:
         mano: Lista de 4 cartas
@@ -521,19 +481,14 @@ def calcular_ev_soporte_condicionado(mano, tiene_jugada_yo, estadisticas, lance,
         prob_comp_tiene = estadisticas.estadisticas_generales['prob_tener_juego']
         W_comp_estimado = 2.0  # Valor medio de juego
     
-    # Factor bayesiano por remoción de cartas
-    peso = calcular_peso_mano(mano)
-    factor_bayesiano = calcular_factor_bayesiano(peso)
-    
     # Si yo ya tengo la jugada, el compañero aporta menos
     if tiene_jugada_yo:
         factor_reduccion = 0.5
     else:
         factor_reduccion = 1.0
     
-    prob_comp_gana = prob_comp_tiene * factor_bayesiano * 0.6  # 60% de prob de ganar si tiene
+    prob_comp_gana = prob_comp_tiene * 0.6  # 60% de prob de ganar si tiene
     
-    # ELIMINADO: descuento artificial * 0.5 en E_extra
     return factor_reduccion * prob_comp_gana * (W_comp_estimado + E_extra)
 
 
@@ -571,7 +526,7 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
     EV_decision_C = EV_propio_C + (beta * EV_soporte_C)
     
     # --- PARES (Condicionado) ---
-    P_RL_pares = calcular_prob_rival('pares', estadisticas, mano)
+    P_RL_pares = calcular_prob_rival('pares', mano, estadisticas)
     
     if analisis['tiene_pares']:
         EV_propio_P = calcular_ev_propio_condicionado(
@@ -592,7 +547,7 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
     EV_decision_P = EV_propio_P + (beta * EV_soporte_P)
     
     # --- JUEGO (Condicionado) ---
-    P_RL_juego = calcular_prob_rival('juego', estadisticas, mano)
+    P_RL_juego = calcular_prob_rival('juego', mano, estadisticas)
     
     if analisis['tiene_juego']:
         EV_propio_J = calcular_ev_propio_condicionado(
