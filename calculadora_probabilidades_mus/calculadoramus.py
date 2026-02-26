@@ -1,303 +1,347 @@
+"""
+Calculadora de Probabilidades de Mus mediante Monte Carlo
+Calcula las probabilidades de victoria de todas las manos iniciales posibles
+en los lances de GRANDE, CHICA, PARES y JUEGO/PUNTO.
+"""
+
 import random
-
 import itertools
-import numpy as np
 import pandas as pd
-def inicializar_baraja():
-    return [1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 5, 5, 5, 5,
-            6, 6, 6, 6, 7, 7, 7, 7, 10, 10, 10, 10,
-            11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12]
-import itertools
-import numpy as np
-def guardar_resultados(resultados, filename):
-    df = pd.DataFrame(resultados)
-    df.to_csv(filename, index=False)
-    return df
-def inicializar_baraja():
-    return [1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 5, 5, 5, 5,
-            6, 6, 6, 6, 7, 7, 7, 7, 10, 10, 10, 10,
-            11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12]
 
-def guardar_resultados_en_txt(df, filename):
-    with open(filename, 'w') as f:
-        f.write(df.to_string(index=False))
 
-def generar_manos_unicas():
-    # generamso las combinaciones de 4 Cartas
-    baraja = inicializar_baraja()
-    combinaciones_manos = list(itertools.combinations(baraja, 4))
+# ============================================================================
+# CONFIGURACIÓN DE LA BARAJA
+# ============================================================================
 
-    # Eliminamos manos duplicadas
-    manos_unicas_dict = {}
-    for mano in combinaciones_manos:
-        key = tuple(sorted(mano))
-        if key not in manos_unicas_dict:
-            manos_unicas_dict[key] = True
-
-    # Convertir las llaves del diccionario a una lista de listas para facilitar el procesamiento posterior
-    manos_unicas_list = [list(mano) for mano in manos_unicas_dict.keys()]
-
-  
+def inicializar_baraja(modo_8_reyes=False):
+    """
+    Inicializa la baraja española según el modo de juego.
     
+    Args:
+        modo_8_reyes: Si es True, usa 8 reyes (1x8, 2x4, 3x4, 12x4)
+                     donde 2=2 y 3=12 para efectos de juego
+                     Si es False, usa 4 reyes tradicional (1x8, 12x8)
+    
+    Returns:
+        Lista con las 40 cartas de la baraja
+    """
+    if modo_8_reyes:
+        # 8 reyes: 
+       
+        return [1, 1, 1, 1, 1, 1, 1, 1,                      
+                12, 12, 12, 12, 12, 12, 12, 12,           
+                4, 4, 4, 4,
+                5, 5, 5, 5,
+                6, 6, 6, 6,
+                7, 7, 7, 7,
+                10, 10, 10, 10,
+                11, 11, 11, 11
+                ]            
+    else:
+        # 4 reyes tradicional
+        return [1, 1, 1, 1, 2, 2, 2, 2,     
+                4, 4, 4, 4,
+                5, 5, 5, 5,
+                6, 6, 6, 6,
+                7, 7, 7, 7,
+                10, 10, 10, 10,
+                11, 11, 11, 11,
+                3, 3, 3, 3, 12, 12, 12, 12] 
 
-    return manos_unicas_list
+
+# ============================================================================
+# GENERACIÓN DE MANOS ÚNICAS
+# ============================================================================
+
+def generar_manos_unicas(baraja):
+    """Genera todas las combinaciones únicas de 4 cartas."""
+    combinaciones = itertools.combinations(baraja, 4)
+    manos_unicas = {tuple(sorted(mano)): list(mano) for mano in combinaciones}
+    return list(manos_unicas.values())
 
 
-manos_unicas_list = generar_manos_unicas()
 
-#print(f"Total de manos únicas: {len(manos_unicas_array)}")
-#print("Ejemplos de manos únicas:", manos_unicas_array[:5])
-#print(manos_unicas_array[320])
-
-
-def tiene_pares(mano):
-    valores = [carta for carta in mano]
-    pares = {valor: valores.count(valor) for valor in set(valores)}
-    pares = {k: v for k, v in pares.items() if v > 1}
-    return pares
+# ============================================================================
+# LANCES: PARES
+# ============================================================================
 
 def clasificar_pares(mano):
-    pares = tiene_pares(mano)
-    if len(pares) == 0:
-        return "no tiene pares", 0, 0
-    elif len(pares) == 1 and list(pares.values())[0] == 4:
-        return "duples", max(pares), max(pares)
-    elif len(pares) == 1 and list(pares.values())[0] == 3:
-        return "medias", max(pares), 0
-    elif len(pares) == 1 and list(pares.values())[0] == 2:
-        return "pares", max(pares), 0
-    elif len(pares) == 2 and all(v == 2 for v in pares.values()):
-        return "duples", max(pares), min(pares)
-    else:
-        raise ValueError("La mano tiene una combinación no válida de pares")
+    """
+    Clasifica los pares de una mano.
+    
+    Returns:
+        tupla (tipo, valor_principal, valor_secundario)
+        tipo: "sin_pares", "pares", "medias", "duples"
+    """
+    conteo = {}
+    for carta in mano:
+        conteo[carta] = conteo.get(carta, 0) + 1
+    
+    repeticiones = {valor: count for valor, count in conteo.items() if count > 1}
+    
+    if not repeticiones:
+        return "sin_pares", 0, 0
+    elif len(repeticiones) == 1:
+        valor = list(repeticiones.keys())[0]
+        count = repeticiones[valor]
+        if count == 4:
+            return "duples", valor, valor
+        elif count == 3:
+            return "medias", valor, 0
+        else:  # count == 2
+            return "pares", valor, 0
+    else:  # len(repeticiones) == 2, ambos con 2 cartas
+        valores = sorted(repeticiones.keys(), reverse=True)
+        return "duples", valores[0], valores[1]
 
-def comparar_pares(tipo1, valor1, valor2_1, tipo2, valor2, valor2_2, es_mano):
-    jerarquia = {"no tiene pares": 0, "pares": 1, "medias": 2, "duples": 3}
-    if jerarquia[tipo1] > jerarquia[tipo2]:
-        return 1
-    elif jerarquia[tipo1] < jerarquia[tipo2]:
-        return -1
-    else:
-        if tipo1 == "duples":
-            if valor1 > valor2:
-                return 1
-            elif valor1 < valor2:
-                return -1
-            else:
-                if valor2_1 > valor2_2:
-                    return 1
-                elif valor2_1 < valor2_2:
-                    return -1
-                else:
-                    return 1 if es_mano else -1  #  gana la mano
-        else:
-            if valor1 > valor2:
-                return 1
-            elif valor1 < valor2:
-                return -1
-            else:
-                return 1 if es_mano else -1  #  gana la mano
 
-def comparar_manos(mano, mano_oponente, es_mano):
-    for i in range(len(mano)):
-        if mano_oponente[i] > mano[i]:
-            return -1
-        elif mano_oponente[i] < mano[i]:
-            return 1
-    return 1 if es_mano else -1  #gana la mano
+def comparar_pares(tipo1, valor1_1, valor1_2, tipo2, valor2_1, valor2_2, es_mano):
+    """Compara dos manos en el lance de PARES."""
+    jerarquia = {"sin_pares": 0, "pares": 1, "medias": 2, "duples": 3}
+    
+    if jerarquia[tipo1] != jerarquia[tipo2]:
+        return 1 if jerarquia[tipo1] > jerarquia[tipo2] else -1
+    
+    # Mismo tipo, comparar valores
+    if valor1_1 != valor2_1:
+        return 1 if valor1_1 > valor2_1 else -1
+    if valor1_2 != valor2_2:
+        return 1 if valor1_2 > valor2_2 else -1
+    
+    return 1 if es_mano else -1  # Empate: gana la mano
+
+
+# ============================================================================
+# LANCES: GRANDE Y CHICA
+# ============================================================================
+
+def comparar_grande_chica(mano1, mano2, es_mano):
+    """
+    Compara dos manos carta por carta.
+    Para GRANDE se ordenan de mayor a menor.
+    Para CHICA se ordenan de menor a mayor.
+    """
+    for carta1, carta2 in zip(mano1, mano2):
+        if carta1 != carta2:
+            return 1 if carta1 > carta2 else -1
+    return 1 if es_mano else -1  # Empate: gana la mano
+
+
+# ============================================================================
+# LANCES: JUEGO Y PUNTO
+# ============================================================================
 
 def calcular_valor_juego(mano):
+    """Calcula el valor de juego (31-40). Retorna 0 si no hay juego."""
     valor = sum(min(carta, 10) for carta in mano)
     return valor if valor >= 31 else 0
 
+
 def convertir_valor_juego(valor):
-    if valor == 31:
-        return 8
-    elif valor == 32:
-        return 7
-    elif valor == 40:
-        return 6
-    elif valor == 37:
-        return 5
-    elif valor == 36:
-        return 4
-    elif valor == 35:
-        return 3
-    elif valor == 34:
-        return 2
-    elif valor == 33:
-        return 1
-    else:
-        return 0
+    """Convierte el valor de juego a su equivalente en el Mus."""
+    valores_juego = {31: 8, 32: 7, 40: 6, 37: 5, 36: 4, 35: 3, 34: 2, 33: 1}
+    return valores_juego.get(valor, 0)
+
 
 def comparar_juego(valor1, valor2, es_mano):
-    if valor1 > valor2:
-        return 1
-    elif valor1 < valor2:
-        return -1
-    else:
-        return 1 if es_mano else -1  # Si hay empate, gana la mano
+    """Compara dos valores de juego."""
+    if valor1 != valor2:
+        return 1 if valor1 > valor2 else -1
+    return 1 if es_mano else -1
+
 
 def calcular_valor_punto(mano):
-    return sum(min(carta, 10) for carta in mano)
+    """Calcula el valor de punto (suma de cartas, máximo 10 por carta)."""
+    return sum(min(carta, 10) for carta in mano)  #min(carta,10) devuelve el valor de la carta si es menor o igual a 10, o 10 si la carta es mayor (como el 11 o 12)
+
 
 def comparar_punto(punto1, punto2, es_mano):
-    if abs(punto1 - 30) < abs(punto2 - 30):
-        return 1
-    elif abs(punto1 - 30) > abs(punto2 - 30):
-        return -1
-    else:
-        return 1 if es_mano else -1  # Si hay empate, gana la mano
+    """Compara dos puntos (gana el más cercano a 30)."""
+    dist1 = abs(punto1 - 30)
+    dist2 = abs(punto2 - 30)
+    if dist1 != dist2:
+        return 1 if dist1 < dist2 else -1
+    return 1 if es_mano else -1
 
-resultados=[]
-for i in range(len(manos_unicas_list)):
+
+
+# ============================================================================
+# SIMULACIÓN MONTE CARLO
+# ============================================================================
+
+def simular_mano(mano, baraja_original, iteraciones=10000):
+    """
+    Simula una mano contra manos aleatorias y calcula probabilidades.
     
-    mano = manos_unicas_list[i]
-    print(mano)
+    Args:
+        mano: Lista de 4 cartas que representan la mano a simular
+        baraja_original: Baraja completa (40 cartas)
+        iteraciones: Número de simulaciones Monte Carlo
     
-    baraja = inicializar_baraja()
+    Returns:
+        Diccionario con las probabilidades de victoria en cada lance
+    """
+    # Preparar baraja sin las cartas de la mano
+    baraja_disponible = baraja_original.copy()
     for carta in mano:
-        if carta in baraja:
-            baraja[baraja.index(carta)] = 0
-
-    # Filtramos  los ceros de la baraja modificada
-    baraja_sin_ceros_original = [carta for carta in baraja if carta != 0]
-
-   #Hacemos una simulacion de 100000 partidas por cada mano, con este numero obtenemos unos resultados fiables, aunque para una precisión "exacta"
-   #sería conveniente iter=10**5
-    iteraciones = 100000
-    ggrande = 0
-    pgrande = 0
-    gchica = 0
-    pchica = 0
-    gpares = 0
-    ppares = 0
-    gjuego = 0
-    pjuego = 0
-
-    # Definir si la mano es la mano principal
+        baraja_disponible.remove(carta)
+    
+    # Contadores de victorias
+    victorias = {"grande": 0, "chica": 0, "pares": 0, "juego": 0}
     es_mano = True
-
-    # Simular las manos
+    
     for _ in range(iteraciones):
-        baraja_sin_ceros = baraja_sin_ceros_original.copy()
+        # Repartir dos manos aleatorias
+        baraja_temp = baraja_disponible.copy()
+        mano1 = random.sample(baraja_temp, 4)
+        for carta in mano1:
+            baraja_temp.remove(carta)
+        mano2 = random.sample(baraja_temp, 4)
         
-        mano_aleatoria = random.sample(baraja_sin_ceros, 4)
-        for carta in mano_aleatoria:
-            if carta in baraja_sin_ceros:
-                baraja_sin_ceros[baraja_sin_ceros.index(carta)] = 0
-
-        mano2 = random.sample([carta for carta in baraja_sin_ceros if carta != 0], 4)
-
-        # Ordenamos las manos para la comparación de los lances de garnde y chica
-        mano.sort()
-        mano_aleatoria.sort()
-        mano2.sort()
-
-        #   Grande
-        resultado_grande1 = comparar_manos(mano, mano_aleatoria, es_mano)
-        resultado_grande2 = comparar_manos(mano, mano2, es_mano)
+        # GRANDE: comparar con mayor a menor
+        mano_grande = sorted(mano, reverse=True)
+        mano1_grande = sorted(mano1, reverse=True)
+        mano2_grande = sorted(mano2, reverse=True)
         
-        if resultado_grande1 < 0 and resultado_grande2 < 0:
-            ggrande += 1
-        else:
-            pgrande += 1
-
-        # Pequeña
-        mano.sort(reverse=True)
-        mano_aleatoria.sort(reverse=True)
-        mano2.sort(reverse=True)
+        if (comparar_grande_chica(mano_grande, mano1_grande, es_mano) > 0 and
+            comparar_grande_chica(mano_grande, mano2_grande, es_mano) > 0):
+            victorias["grande"] += 1
         
-        resultado_chica1 = comparar_manos(mano, mano_aleatoria, es_mano)
-        resultado_chica2 = comparar_manos(mano, mano2, es_mano)
-
-        if resultado_chica1 > 0 and resultado_chica2 > 0:
-            gchica += 1
-        else:
-            pchica += 1
-
-        #Pares
-        tipo_mano, valor_mano, valor_mano2 = clasificar_pares(mano)
-        tipo_mano_aleatoria, valor_mano_aleatoria, valor_mano2_aleatoria = clasificar_pares(mano_aleatoria)
-        tipo_mano2, valor_mano2_mano2, valor_mano2_2 = clasificar_pares(mano2)
+        # CHICA: comparar con menor a mayor
+        mano_chica = sorted(mano)
+        mano1_chica = sorted(mano1)
+        mano2_chica = sorted(mano2)
         
-        resultado_pares1 = comparar_pares(tipo_mano, valor_mano, valor_mano2, tipo_mano_aleatoria, valor_mano_aleatoria, valor_mano2_aleatoria, es_mano)
-        resultado_pares2 = comparar_pares(tipo_mano, valor_mano, valor_mano2, tipo_mano2, valor_mano2_mano2, valor_mano2_2, es_mano)
+        if (comparar_grande_chica(mano_chica, mano1_chica, es_mano) < 0 and
+            comparar_grande_chica(mano_chica, mano2_chica, es_mano) < 0):
+            victorias["chica"] += 1
         
-        if resultado_pares1 > 0 and resultado_pares2 > 0:
-            gpares += 1
-        else:
-            ppares += 1
-
-        # Juego
+        # PARES
+        tipo_mano, val1, val2 = clasificar_pares(mano)
+        tipo_mano1, val1_m1, val2_m1 = clasificar_pares(mano1)
+        tipo_mano2, val1_m2, val2_m2 = clasificar_pares(mano2)
+        
+        if (comparar_pares(tipo_mano, val1, val2, tipo_mano1, val1_m1, val2_m1, es_mano) > 0 and
+            comparar_pares(tipo_mano, val1, val2, tipo_mano2, val1_m2, val2_m2, es_mano) > 0):
+            victorias["pares"] += 1
+        
+        # JUEGO o PUNTO
         valor_juego = convertir_valor_juego(calcular_valor_juego(mano))
-        valor_juego_aleatoria = convertir_valor_juego(calcular_valor_juego(mano_aleatoria))
+        valor_juego1 = convertir_valor_juego(calcular_valor_juego(mano1))
         valor_juego2 = convertir_valor_juego(calcular_valor_juego(mano2))
         
-        if valor_juego > 0 or valor_juego_aleatoria > 0 or valor_juego2 > 0:
-            resultado_juego1 = comparar_juego(valor_juego, valor_juego_aleatoria, es_mano)
-            resultado_juego2 = comparar_juego(valor_juego, valor_juego2, es_mano)
-            
-            if resultado_juego1 > 0 and resultado_juego2 > 0:
-                gjuego += 1
-            else:
-                pjuego += 1
+        if valor_juego > 0 or valor_juego1 > 0 or valor_juego2 > 0:
+            # Hay juego
+            if (comparar_juego(valor_juego, valor_juego1, es_mano) > 0 and
+                comparar_juego(valor_juego, valor_juego2, es_mano) > 0):
+                victorias["juego"] += 1
         else:
-            # Comparar para punto
-            valor_punto = calcular_valor_punto(mano)
-            valor_punto_aleatoria = calcular_valor_punto(mano_aleatoria)
-            valor_punto2 = calcular_valor_punto(mano2)
+            # Se compara por punto
+            punto = calcular_valor_punto(mano)
+            punto1 = calcular_valor_punto(mano1)
+            punto2 = calcular_valor_punto(mano2)
             
-            resultado_punto1 = comparar_punto(valor_punto, valor_punto_aleatoria, es_mano)
-            resultado_punto2 = comparar_punto(valor_punto, valor_punto2, es_mano)
-            
-            if resultado_punto1 > 0 and resultado_punto2 > 0:
-                gjuego += 1
-            else:
-                pjuego += 1
-  # Mostrar los resultados
-    #print(f"Probabilidad de ganar a GRANDE: {gchica / iteraciones:.2%}")
-    #print(f"Probabilidad de ganar a PEKE: {ggrande / iteraciones:.2%}")
-    #print(f"Probab(ilidad de ganar a pares: {gpares / iteraciones:.2%}")
-    #print(f"Probabilidad de ganar a juego: {gjuego / iteraciones:.2%}")   
-    #print(gchica/iteraciones)
-    #print(ggrande/iteraciones)
-    #print(gpares/iteraciones)
-    #print(gjuego/iteraciones)
-    resultado = {
+            if (comparar_punto(punto, punto1, es_mano) > 0 and
+                comparar_punto(punto, punto2, es_mano) > 0):
+                victorias["juego"] += 1
+    
+    # Calcular probabilidades
+    return {
         "mano": mano,
-        "probabilidad_grande": gchica / iteraciones,
-        "probabilidad_chica": ggrande / iteraciones,
-        "probabilidad_pares": gpares / iteraciones,
-        "probabilidad_juego": gjuego / iteraciones
+        "probabilidad_grande": victorias["grande"] / iteraciones,
+        "probabilidad_chica": victorias["chica"] / iteraciones,
+        "probabilidad_pares": victorias["pares"] / iteraciones,
+        "probabilidad_juego": victorias["juego"] / iteraciones
     }
-    resultados.append(resultado)
-  
-df_resultados = pd.DataFrame(resultados)
-df_resultados.to_csv('resultados_probabilidades.csv', index=False)
-print("Resultados guardados en 'resultados_probabilidades.csv'")
-print(df_resultados.head()) 
-print(df_resultados)   
-# Guardar todos los resultados en un fichero de texto al final del bucle
-guardar_resultados_en_txt(df_resultados, 'resultados_probabilidades.txt')
-print("Resultados guardados en 'resultados_probabilidades.txt'")
 
+
+def calcular_todas_probabilidades(modo_8_reyes=False, iteraciones=10000):
+    """
+    Calcula las probabilidades de todas las manos únicas posibles.
     
- 
-
-
-
+    Args:
+        modo_8_reyes: True para jugar con 8 reyes, False para 4 reyes
+        iteraciones: Número de simulaciones por mano
     
+    Returns:
+        DataFrame con los resultados
+    """
+    baraja = inicializar_baraja(modo_8_reyes)
+    manos_unicas = generar_manos_unicas(baraja)
+    
+    print(f"\n{'='*60}")
+    print(f"Modo: {'8 REYES' if modo_8_reyes else '4 REYES'}")
+    print(f"Total de manos únicas: {len(manos_unicas)}")
+    print(f"Iteraciones por mano: {iteraciones:,}")
+    print(f"{'='*60}\n")
+    
+    resultados = []
+    for i, mano in enumerate(manos_unicas, 1):
+        if i % 50 == 0:
+            print(f"Procesando mano {i}/{len(manos_unicas)}...")
+        resultado = simular_mano(mano, baraja, iteraciones)
+        resultados.append(resultado)
+    
+    return pd.DataFrame(resultados)
 
 
+def guardar_resultados(df, prefijo="resultados"):
+    """Guarda los resultados en archivos CSV y TXT."""
+    archivo_csv = f"{prefijo}.csv"
+    archivo_txt = f"{prefijo}.txt"
+    
+    df.to_csv(archivo_csv, index=False)
+    with open(archivo_txt, 'w') as f:
+        f.write(df.to_string(index=False))
+    
+    print(f"\n✓ Resultados guardados:")
+    print(f"  - {archivo_csv}")
+    print(f"  - {archivo_txt}")
 
-       
 
- 
+# ============================================================================
+# PROGRAMA PRINCIPAL
+# ============================================================================
+
+def main():
+    """Función principal del programa."""
+    print("\n" + "="*60)
+    print(" CALCULADORA DE PROBABILIDADES DE MUS - MONTE CARLO")
+    print("="*60)
+    
+    # Selección de modo
+    print("\nSelecciona el modo de juego:")
+    print("  1. Modo 4 REYES (1x4, 12x4 - tradicional)")
+    print("  2. Modo 8 REYES (1x8, 12x8 con 2=2 y 3=12)")
+    
+    while True:
+        opcion = input("\nOpción [1/2]: ").strip()
+        if opcion in ["1", "2"]:
+            break
+        print("Por favor, introduce 1 o 2.")
+    
+    modo_8_reyes = (opcion == "2")
+    
+    # Ejecutar simulación
+    df_resultados = calcular_todas_probabilidades(modo_8_reyes)
+    
+    # Guardar resultados
+    prefijo = "resultados_8reyes" if modo_8_reyes else "resultados_4reyes"
+    guardar_resultados(df_resultados, prefijo)
+    
+    # Mostrar estadísticas generales
+    print(f"\n{'='*60}")
+    print("ESTADÍSTICAS GENERALES")
+    print(f"{'='*60}")
+    print(f"\nPrimeras 10 manos:")
+    print(df_resultados.head(10).to_string(index=False))
+    
+    print(f"\n{'='*60}")
+    print("Proceso completado exitosamente")
+    print(f"{'='*60}\n")
 
 
-
-
-#### LOS PRINGT ESTAN MAL GCHICA=GGRANDE
+if __name__ == "__main__":
+    main()
 
 
