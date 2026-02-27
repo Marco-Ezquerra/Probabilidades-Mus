@@ -1,7 +1,8 @@
 # Fundamentos Matemáticos del Motor de Decisión Mus
 
 > **Versión**: 2.3 (marzo de 2026)  
-> **Enfoque**: Probabilidades condicionadas exactas mediante distribución hipergeométrica
+> **Enfoque**: Probabilidades condicionadas exactas mediante distribución hipergeométrica  
+> **Fase 1 COMPLETA**: Grande, Chica, Pares, Juego y **Punto**
 
 ---
 
@@ -9,7 +10,7 @@
 
 1. [Valor Esperado Total](#1-valor-esperado-total)
 2. [Lances Lineales (Grande y Chica)](#2-lances-lineales-grande-y-chica)
-3. [Lances Condicionados (Pares y Juego)](#3-lances-condicionados-pares-y-juego)
+3. [Lances Condicionados (Pares, Juego y Punto)](#3-lances-condicionados-pares-juego-y-punto)
 4. [Probabilidades de Desempate](#4-probabilidades-de-desempate)
 5. [Probabilidades Condicionadas Exactas](#5-probabilidades-condicionadas-exactas)
 6. [Política de Decisión Estocástica](#6-política-de-decisión-estocástica)
@@ -35,8 +36,13 @@ $$
 **Descomposición por lances:**
 
 $$
-\text{EV}_{\text{Total}} = \sum_{L \in \{\text{Grande, Chica, Pares, Juego}\}} \left( \text{EV}_{\text{Propio}}^L + \beta \cdot \text{EV}_{\text{Soporte}}^L \right)
+\text{EV}_{\text{Total}} = \sum_{L \in \{\text{Grande, Chica, Pares, Juego, Punto}\}} \left( \text{EV}_{\text{Propio}}^L + \beta \cdot \text{EV}_{\text{Soporte}}^L \right)
 $$
+
+**Nota sobre Juego vs Punto:**
+- Si yo tengo juego (31-40) → se usa $\text{EV}_{\text{Juego}}$ (con jerarquía)
+- Si yo NO tengo juego → se usa $\text{EV}_{\text{Punto}}$ (solo si ningún rival tiene juego)
+- Son **mutuamente excluyentes**: solo uno contribuye al EV total
 
 ---
 
@@ -70,13 +76,15 @@ $$
 
 ---
 
-## 3. Lances Condicionados (Pares y Juego)
+## 3. Lances Condicionados (Pares, Juego y Punto)
 
 Los lances condicionados requieren considerar dos escenarios:
 1. **Rival NO tiene la jugada** → Gano automáticamente
 2. **Rival SÍ tiene la jugada** → Debo comparar y ganar el desempate
 
-### EV Propio (Condicionado)
+### 3.1 Pares y Juego
+
+#### EV Propio (Condicionado)
 
 $$
 \text{EV}_{\text{Propio}}^{\text{Cond}} = (1 - P_{RL}) \cdot W + P_{RL} \cdot P(\text{yo}|RL) \cdot (W + E_{\text{extra}})
@@ -100,6 +108,40 @@ $$
   - **Actualmente: 0** (sistema de envites por implementar)
   - Pares: 0
   - Juego: 0
+
+### 3.2 Punto (cuando nadie tiene juego)
+
+**Regla:** El lance de Punto **solo se juega** si ninguno de los 4 jugadores tiene juego (31-40).
+
+**Cálculo:**
+- Suma de las cartas (máximo 10 por carta)
+- Gana el más cercano a 30
+- **W_punto = 1.0** (independiente del valor del punto)
+
+#### EV Punto (cuando yo NO tengo juego)
+
+$$
+\text{EV}_{\text{Punto}} = (1 - P_{RL}^{\text{juego}}) \cdot P(\text{yo gano punto}) \cdot W_{\text{punto}}
+$$
+
+**Donde:**
+- $P_{RL}^{\text{juego}}$: Probabilidad de que algún rival tenga juego
+  - Si algún rival tiene juego → pierdo automático (no se juega punto)
+- $P(\text{yo gano punto})$: Probabilidad de ganar en comparación de puntos
+  - Precomputada en `prob_juego` del dataset (incluye victorias por punto)
+- $W_{\text{punto}} = 1.0$: Todos los puntos valen 1 punto base
+
+**Interpretación:**
+- $(1 - P_{RL}^{\text{juego}})$: Probabilidad de que **ningún jugador** tenga juego
+- Solo en ese caso se compara por punto
+
+**Ejemplo:**
+```
+Mano: [1,1,12,12] (duples sin juego, punto 22)
+- EV_pares: ~3.0 puntos (duples)
+- EV_punto: ~2.0 puntos (si ningún rival tiene juego)
+- EV_total: ~6.1 puntos
+```
 
 **Descomposición:**
 

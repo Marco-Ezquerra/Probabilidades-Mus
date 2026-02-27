@@ -95,8 +95,10 @@ def calcular_evs_todas_manos(motor: MotorDecisionMus,
             'tiene_juego': analisis['tiene_juego'],
             'tipo_pares': analisis['tipo_pares'],
             'valor_juego': analisis['valor_juego_raw'],  # Clave correcta
+            'valor_punto': analisis['valor_punto'],
             'W_pares': analisis['W_pares'],
             'W_juego': analisis['W_juego'],
+            'W_punto': analisis['W_punto'],
         }
         
         for pos in posiciones:

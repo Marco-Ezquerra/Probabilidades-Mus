@@ -33,7 +33,8 @@ from calculadoramus import (
     inicializar_baraja,
     clasificar_pares,
     calcular_valor_juego,
-    convertir_valor_juego
+    convertir_valor_juego,
+    calcular_valor_punto
 )
 
 
@@ -64,10 +65,14 @@ VALORES_JUEGO = {
     33: 2.0       # Jerarquía 1 (peor juego)
 }
 
+# Valor de punto (cuando nadie tiene juego 31-40)
+W_PUNTO = 1.0  # Todos los puntos valen 1 punto base
+
 # Esperanza de puntos extra en envites (Swing)
 # NOTA: Actualmente 0.0, se implementará sistema de envites en futuro
 E_EXTRA_PARES = 0.0
 E_EXTRA_JUEGO = 0.0
+E_EXTRA_PUNTO = 0.0
 
 # Perfiles predefinidos
 PERFILES = {
@@ -301,6 +306,7 @@ def analizar_mano(mano):
     tipo_pares, valor_pares, valor_secundario = clasificar_pares(mano)
     valor_juego_raw = calcular_valor_juego(mano)
     valor_juego_convertido = convertir_valor_juego(valor_juego_raw)
+    valor_punto = calcular_valor_punto(mano)
     
     # Valor W para pares
     W_pares = VALORES_PARES.get(tipo_pares, 0)
@@ -316,7 +322,9 @@ def analizar_mano(mano):
         'tiene_juego': valor_juego_raw > 0,
         'valor_juego_raw': valor_juego_raw,
         'valor_juego_convertido': valor_juego_convertido,
-        'W_juego': W_juego
+        'W_juego': W_juego,
+        'valor_punto': valor_punto,
+        'W_punto': W_PUNTO
     }
 
 
@@ -546,10 +554,14 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
     )
     EV_decision_P = EV_propio_P + (beta * EV_soporte_P)
     
-    # --- JUEGO (Condicionado) ---
+    # --- JUEGO Y PUNTO (Condicionado) ---
+    # El lance de "Juego" incluye dos casos:
+    # 1. Si algún jugador tiene juego (31-40) → se compara juego (jerarquía)
+    # 2. Si nadie tiene juego → se compara por punto (distancia a 30, W=1)
     P_RL_juego = calcular_prob_rival('juego', mano, estadisticas)
     
     if analisis['tiene_juego']:
+        # Caso 1: Yo tengo juego → usar lógica de juego con jerarquía
         EV_propio_J = calcular_ev_propio_condicionado(
             mano,
             analisis['W_juego'],
@@ -559,16 +571,42 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
             estadisticas,
             posicion
         )
+        EV_soporte_J = calcular_ev_soporte_condicionado(
+            mano, analisis['tiene_juego'], estadisticas, 'juego', E_EXTRA_JUEGO
+        )
+        EV_decision_J = EV_propio_J + (beta * EV_soporte_J)
+        EV_propio_Punto = 0.0  # No se juega punto si tengo juego
+        EV_soporte_Punto = 0.0
+        EV_decision_Punto = 0.0
     else:
-        EV_propio_J = 0.0
-    
-    EV_soporte_J = calcular_ev_soporte_condicionado(
-        mano, analisis['tiene_juego'], estadisticas, 'juego', E_EXTRA_JUEGO
-    )
-    EV_decision_J = EV_propio_J + (beta * EV_soporte_J)
+        # Caso 2: Yo NO tengo juego → puede jugarse punto
+        # Si algún rival tiene juego → pierdo automático (0 puntos)
+        # Si ningún rival tiene juego → se juega punto (W=1)
+        
+        # EV propio de punto (solo si ningún rival tiene juego)
+        # La prob_juego del CSV ya incluye victorias por punto cuando no hay juego
+        EV_propio_Punto = calcular_ev_propio_condicionado(
+            mano,
+            W_PUNTO,
+            P_RL_juego,
+            E_EXTRA_PUNTO,
+            'juego',  # Usa misma probabilidad (incluye punto)
+            estadisticas,
+            posicion
+        )
+        
+        # Soporte del compañero (puede tener juego o no)
+        EV_soporte_Punto = calcular_ev_soporte_condicionado(
+            mano, False, estadisticas, 'juego', E_EXTRA_PUNTO
+        )
+        
+        EV_decision_Punto = EV_propio_Punto + (beta * EV_soporte_Punto)
+        EV_propio_J = 0.0  # No tengo juego
+        EV_soporte_J = 0.0
+        EV_decision_J = 0.0
     
     # --- EV TOTAL ---
-    EV_total = EV_decision_G + EV_decision_C + EV_decision_P + EV_decision_J
+    EV_total = EV_decision_G + EV_decision_C + EV_decision_P + EV_decision_J + EV_decision_Punto
     
     # Desglose detallado
     desglose = {
@@ -577,6 +615,7 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
         'chica': {'propio': EV_propio_C, 'soporte': EV_soporte_C, 'decision': EV_decision_C},
         'pares': {'propio': EV_propio_P, 'soporte': EV_soporte_P, 'decision': EV_decision_P},
         'juego': {'propio': EV_propio_J, 'soporte': EV_soporte_J, 'decision': EV_decision_J},
+        'punto': {'propio': EV_propio_Punto, 'soporte': EV_soporte_Punto, 'decision': EV_decision_Punto},
         'analisis_mano': analisis,
         'probabilidades': prob_mano
     }

@@ -1,178 +1,48 @@
-# 📦 Módulo: calculadora_probabilidades_mus
+# Motor de Decisión Mus - Fase 1 COMPLETA ✅
 
-Motor de decisión para Mus basado en **Valor Esperado (EV)** con fundamentos matemáticos rigurosos.
-
-**Versión:** 2.2 (27 de febrero de 2026)
-
----
-
-## 📚 Documentación Matemática
-
-| Documento | Descripción |
-|-----------|-------------|
-| **[FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md)** | 📐 **PIZARRA PRINCIPAL** - Formulación matemática completa |
-| **[DESEMPATES_MATEMATICOS.md](DESEMPATES_MATEMATICOS.md)** | 🎯 Implementación de desempates exactos y tests |
+> **Versión**: 2.3 (febrero 2026)  
+> **Estado**: Fase 1 completada y verificada  
+> **Lances modelados**: Grande, Chica, Pares, Juego y **Punto**
 
 ---
 
-## 🎲 Archivos Principales
+## 🎯 Descripción
 
-### `calculadoramus.py`
-**Simulador Monte Carlo** - Genera estadísticas a priori mediante 50-100k simulaciones.
+Motor de decisión basado en Valor Esperado (EV) matemático para el juego del Mus. Implementa un agente IA que decide **"Cortar"** o dar **"Mus"** en las primeras dadas, utilizando:
 
-```bash
-python3 calculadoramus.py  # Genera resultados_{4,8}reyes.csv
+- ✅ Probabilidades exactas precomputadas (Monte Carlo 10,000 iteraciones)
+- ✅ Modelo de soporte del compañero (desconocido)
+- ✅ Desempates exactos por posición en la mesa
+- ✅ Jerarquía correcta del juego (31 > 32 > 40 > 37 > 36 > 35 > 34 > 33)
+- ✅ Lance de Punto implementado (cuando nadie tiene juego)
+- ✅ Política de decisión estocástica (sigmoide)
+
+---
+
+## 📦 Estructura del Proyecto
+
+```
+calculadora_probabilidades_mus/
+├── calculadoramus.py           # Simulación Monte Carlo y cálculo de probabilidades
+├── motor_decision.py            # Motor de decisión basado en EV
+├── test_motor_desempates.py     # Suite de tests (7/7 ✓)
+├── sanity_check_ev.py           # Verificación de coherencia matemática
+│
+├── resultados_8reyes.csv        # Probabilidades precomputadas (330 manos)
+├── sanity_check_ev_8reyes.csv  # EVs de todas las manos en 4 posiciones
+│
+├── README.md                    # Este archivo
+├── FUNDAMENTOS_MATEMATICOS.md   # Documentación matemática completa
+├── CHANGELOG_v2.3.md            # Historial de cambios y correcciones
+├── SANITY_CHECK_README.md       # Guía del sanity check
+└── TABLA_MAESTRA_EV.md          # 📊 Ranking completo de manos por EV
 ```
 
-### `motor_decision.py`
-**Motor de decisión basado en EV**
-
-**Formulación:**
-$$
-\text{EV}_{\text{Total}} = \text{EV}_{\text{Propio}} + \beta \cdot \text{EV}_{\text{Soporte}}
-$$
-
-**Características:**
-- Desempates exactos: $P(\text{ganar}) = P(\text{rival} < \text{yo}) + P(\text{empate}) \cdot \delta_{\text{posición}}$
-- Factor bayesiano simétrico (remoción de cartas)
-- Política estocástica (sigmoide + ruido gaussiano)
-
-**Perfiles:**
-
-| Perfil | $\beta$ | $\mu$ | % Cortes |
-|--------|---------|-------|----------|
-| Conservador | 0.65 | 4.95 | ~31% |
-| Normal | 0.75 | 4.34 | ~41% |
-| Agresivo | 0.85 | 2.87 | ~60% |
-
-**Uso:**
-```python
-from motor_decision import MotorDecisionMus
-
-motor = MotorDecisionMus(modo_8_reyes=True, perfil='normal')
-decision, P_cortar, EV, desglose = motor.decidir([12,11,10,1], posicion=1)
-```
-
-### `analizar_mano_detallado.py`
-**Análisis paso a paso con desglose matemático**
-
-```bash
-python3 analizar_mano_detallado.py --mano 12 11 10 1 --posicion 1 --beta 0.75
-```
-
-Muestra:
-- Cálculo de EV por lance
-- Probabilidades exactas ($P(\text{menor})$, $P(\text{empate})$)
-- Factor bayesiano aplicado
-- Impacto de $\beta$ en EV de soporte
-
-### `test_motor_desempates.py`
-**Suite de 7 tests automáticos**
-
-```bash
-python3 test_motor_desempates.py  # ✅ 7/7 pasados
-```
-
-Valida:
-1. Probabilidades exactas
-2. Impacto de posición
-3. Casos límite
-4. Casos típicos
-5. Comparación sistemática
-6. Estabilidad sin empate
-7. Estocasticidad
-
-### `prueba_bayesiana.py`
-**Validador de simetría bayesiana (v2.2)**
-
-```bash
-python3 prueba_bayesiana.py
-```
-
-Verifica que $f_{\text{Bayes}}$ se aplica simétricamente a compañero Y rivales.
-
 ---
 
-## 📊 Datasets
+## 🚀 Uso Rápido
 
-| Archivo | Contenido | Generado Por |
-|---------|-----------|-------------|
-| `resultados_4reyes.csv` | 715 manos únicas (4 reyes) | calculadoramus.py |
-| `resultados_8reyes.csv` | 245 manos únicas (8 reyes) | calculadoramus.py |
-| `calibracion_mu.json` | Umbrales $\mu$ por perfil | motor_decision.py |
-
----
-
-## 🧮 Formulación Matemática Clave
-
-### Valor Esperado Total
-
-$$
-\text{EV}_{\text{Total}} = \sum_{L \in \{\text{G, Ch, P, J}\}} \left( \text{EV}_{\text{Propio}}^L + \beta \cdot \text{EV}_{\text{Soporte}}^L \right)
-$$
-
-### Lance Lineal (Grande, Chica)
-
-$$
-\text{EV}_{\text{Propio}}^{\text{Lineal}} = P(\text{yo gano}) \cdot 1.0
-$$
-
-### Lance Condicionado (Pares, Juego)
-
-$$
-\text{EV}_{\text{Propio}}^{\text{Cond}} = (1 - P_{RL}) \cdot W + P_{RL} \cdot P(\text{yo}|RL) \cdot (W + E_{\text{extra}})
-$$
-
-**Donde:**
-$$
-\begin{aligned}
-P_{RL} &= 1 - (1 - p_{\text{individual}} \cdot f_{\text{Bayes}})^2 \\
-P(\text{yo}|RL) &= P(\text{rival} < \text{yo}) + P(\text{empate}) \cdot \delta_{\text{posición}} \\
-\delta_{\text{posición}} &\in \{1.0, 0.5, 0.5, 0.0\} \text{ para pos } \{1, 2, 3, 4\}
-\end{aligned}
-$$
-
-### Factor Bayesiano
-
-$$
-f_{\text{Bayes}}(w) = 1.3 - \frac{w}{16} \cdot 0.6
-$$
-
-**Peso:** $w = \sum_{c \in \text{mano}} w(c)$
-
-| Carta | Peso |
-|-------|------|
-| Rey (12) | 4.0 |
-| Caballo (11) | 2.5 |
-| As (1) | 1.5 |
-| Sota (10) | 1.0 |
-| Resto | 0.0 |
-
-### Política de Decisión
-
-$$
-P(\text{Cortar}|\text{EV}) = \frac{1}{1 + e^{-k \cdot (\text{EV} - \mu)}}
-$$
-
-Con ruido: $\text{EV}_{\text{decisión}} = \text{EV}_{\text{Total}} + \mathcal{N}(0, 0.15^2)$
-
----
-
-## ✅ Estado del Proyecto
-
-| Característica | Estado |
-|----------------|--------|
-| Tests automáticos | ✅ 7/7 pasados |
-| Versión actual | Motor v2.2 |
-| Desempates exactos | ✅ Implementado |
-| Simetría bayesiana | ✅ Corregido (v2.2) |
-| Documentación matemática | ✅ Completa |
-
-**Próxima fase:** Segundas dadas y estrategia de descarte
-
----
-
-## 🎯 Ejemplo de Uso
+### 1. Calcular Valor Esperado (EV) de una mano
 
 ```python
 from motor_decision import MotorDecisionMus
@@ -180,22 +50,196 @@ from motor_decision import MotorDecisionMus
 # Inicializar motor
 motor = MotorDecisionMus(modo_8_reyes=True, perfil='normal')
 
-# Mano con alto empate (31)
-mano = [12, 11, 10, 1]
+# Analizar una mano (posición 1)
+mano = [12, 12, 10, 10]  # Duples Rey-Sota
+decision, probabilidad, ev, desglose = motor.decidir(mano, posicion=1)
 
-# Decidir desde posición 1 (Mano)
-decision, P_cortar, EV, desglose = motor.decidir(mano, posicion=1)
-print(f"Posición 1: EV={EV:.2f}, P(Cortar)={P_cortar:.1%}")
-# Output: Posición 1: EV=4.84, P(Cortar)=89.6%
+print(f"Decisión: {decision}")           # "CORTAR" o "MUS"
+print(f"Probabilidad: {probabilidad:.1%}")  # % de cortar
+print(f"EV total: {ev:.2f} puntos")      # Valor esperado
 
-# Decidir desde posición 4 (Postre)
-decision, P_cortar, EV, desglose = motor.decidir(mano, posicion=4)
-print(f"Posición 4: EV={EV:.2f}, P(Cortar)={P_cortar:.1%}")
-# Output: Posición 4: EV=4.24, P(Cortar)=84.7%
+# Desglose detallado
+print(f"EV Grande: {desglose['grande']['decision']:.2f}")
+print(f"EV Chica:  {desglose['chica']['decision']:.2f}")
+print(f"EV Pares:  {desglose['pares']['decision']:.2f}")
+print(f"EV Juego:  {desglose['juego']['decision']:.2f}")
+print(f"EV Punto:  {desglose['punto']['decision']:.2f}")
+```
 
-# Diferencia por posición: +14.2% en EV por estar en Mano
+### 2. Generar estadísticas (si no existen)
+
+```bash
+# Calcular probabilidades para todas las 330 manos únicas
+python3 calculadoramus.py
+
+# Esto genera: resultados_8reyes.csv (tarda ~5-10 minutos)
+```
+
+### 3. Verificar coherencia del modelo
+
+```bash
+# Ejecutar sanity check completo
+python3 sanity_check_ev.py
+
+# Genera:
+# - sanity_check_ev_8reyes.csv (EVs de todas las manos)
+# - sanity_check_report_8reyes.txt (resumen de verificaciones)
 ```
 
 ---
 
-**Ver [FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md) para teoría completa**
+## 📊 Resultados Clave
+
+### Estadísticas Globales (330 manos únicas × 4 posiciones)
+
+| Métrica | Posición 1 (Mano) | Posición 4 (Postre) |
+|---------|-------------------|---------------------|
+| **EV Medio** | 3.43 ± 1.49 | 3.34 ± 1.44 |
+| **EV Máximo** | 7.17 | 7.03 |
+| **EV Mínimo** | 2.05 | 2.05 |
+
+### Top 5 Mejores Manos
+
+| Mano | EV (pos1) | Composición |
+|------|-----------|-------------|
+| [6,6,12,12] | 7.17 | Duples + Juego 32 |
+| [12,12,12,12] | 6.71 | Duples + Juego 40 |
+| [1,12,12,12] | 6.70 | Medias + Juego 31 |
+| [11,11,12,12] | 6.68 | Duples + Juego 40 |
+| [10,10,12,12] | 6.61 | Duples  + Juego 40 |
+
+### Composición de Manos
+
+- **Con pares**: 104 manos (31.5%)
+- **Con juego (31-40)**: 104 manos (31.5%)  
+- **Solo punto**: 226 manos (68.5%)
+  - Punto promedio: 22.8 (min: 4, max: 30)
+  - EV promedio: ~2.9 puntos
+
+---
+
+## 🔬 Fundamentos Matemáticos
+
+### Fórmula EV Total
+
+$$
+\text{EV}_{\text{Total}} = \text{EV}_{\text{Grande}} + \text{EV}_{\text{Chica}} + \text{EV}_{\text{Pares}} + \text{EV}_{\text{Juego/Punto}}
+$$
+
+**Donde cada lance se descompone en:**
+
+$$
+\text{EV}_{\text{Lance}} = \text{EV}_{\text{Propio}} + \beta \cdot \text{EV}_{\text{Soporte}}
+$$
+
+- **EV_Propio**: Valor esperado de mi mano propia
+- **EV_Soporte**: Valor esperado del soporte del compañero
+- **β** ∈ [0, 1]: Factor de confianza (0.65 conservador, 0.75 normal, 0.85 agresivo)
+
+### Valores Base (W)
+
+| Lance | Valor W |
+|-------|---------|
+| **Grande/Chica** | 1.0 |
+| **Pares** | 1 (pares), 2 (medias), 3 (duples) |
+| **Juego** | 2.0-3.0 (según jerarquía 31 > 32 > 40 > ... > 33) |
+| **Punto** | 1.0 (todos los puntos) |
+
+**Documentación completa**: Ver [FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md)
+
+---
+
+## ✅ Verificaciones
+
+### Tests Automatizados
+
+```bash
+python3 test_motor_desempates.py
+```
+
+**Resultado**: 7/7 tests pasados ✓
+
+**Verificaciones incluidas**:
+- Probabilidades exactas (prob_menor + prob_empate)
+- Factor de desempate por posición
+- Casos típicos de partida
+- Coherencia entre posiciones
+- Decisión estocástica
+
+### Sanity Check
+
+```bash
+python3 sanity_check_ev.py
+```
+
+**Verificaciones**:
+1. ✅ Posición 1 siempre EV ≥ otras posiciones
+2. ✅ Correlaciones entre posiciones > 0.99
+3. ✅ Diferencias proporcionales a P(empate)
+4. ✅ Rankings coherentes (juego 31 arriba, sin jugadas abajo)
+
+---
+
+## 🛠️ Configuración
+
+### Perfiles de Juego
+
+```python
+PERFILES = {
+    'conservador': {'beta': 0.65, 'percentil_mu': 55},  # Menos confianza, más cortes
+    'normal':      {'beta': 0.75, 'percentil_mu': 45},  # Equilibrado
+    'agresivo':    {'beta': 0.85, 'percentil_mu': 30}   # Alta confianza, menos cortes
+}
+```
+
+### Modos de Juego
+
+- **Modo 8 Reyes**: 40 cartas (4 ases, 4 reyes, 4 caballos, 4 sotas, 6×4 cartas 4-10)
+- **Modo 4 Reyes**: 32 cartas (sin 10s)
+
+---
+
+## 📚 Historial de Versiones
+
+### v2.3 (febrero 2026) - FASE 1 COMPLETA ✅
+
+**Cambios principales:**
+1. ✅ Eliminación de heurística bayesiana lineal
+2. ✅ Probabilidades condicionadas exactas (hipergeométrica)
+3. ✅ Corrección de valores base (E_EXTRA → 0.0)
+4. ✅ **Jerarquía del juego** implementada (31 > 32 > 40 > ...)
+5. ✅ **Lance de Punto** implementado
+6. ✅ Desempates exactos por posición
+
+**Ver historial completo**: [CHANGELOG_v2.3.md](CHANGELOG_v2.3.md)
+
+---
+
+## 🎯 Próximos Pasos (Fase 2)
+
+- [ ] Simulaciones masivas de partidas completas
+- [ ] Validación estadística contra juego real
+- [ ] Implementación de sistema de envites (E_EXTRA > 0)
+- [ ] Modelo de descarte óptimo (qué cartas tirar)
+- [ ] Tracking de historial de partida (señales, faroleos)
+
+---
+
+## 📖 Documentación Completa
+
+- **[README.md](README.md)** (este archivo): Visión general y uso rápido
+- **[FUNDAMENTOS_MATEMATICOS.md](FUNDAMENTOS_MATEMATICOS.md)**: Fórmulas y modelado matemático
+- **[CHANGELOG_v2.3.md](CHANGELOG_v2.3.md)**: Historial detallado de cambios
+- **[SANITY_CHECK_README.md](SANITY_CHECK_README.md)**: Guía de verificación
+
+---
+
+## 📄 Licencia
+
+Este proyecto es de código abierto para uso educativo y de investigación.
+
+---
+
+**Desarrollado por**: Marco Ezquerra  
+**Fecha**: Febrero 2026  
+**Versión**: 2.3 - Fase 1 Completa

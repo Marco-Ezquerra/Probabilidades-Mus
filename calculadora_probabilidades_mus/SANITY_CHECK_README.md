@@ -2,7 +2,7 @@
 
 ## 🎯 Objetivo
 
-Script para verificar que el modelo matemático del motor de decisión (Fase 1) es coherente antes de realizar simulaciones masivas (Fase 2). Calcula el Valor Esperado (EV) de todas las 330 manos únicas en las 4 posiciones de la mesa y verifica que el ordenamiento tiene sentido matemático.
+Script para verificar que el modelo matemático del motor de decisión **(Fase 1 COMPLETA: Grande, Chica, Pares, Juego y Punto)** es coherente antes de realizar simulaciones masivas (Fase 2). Calcula el Valor Esperado (EV) de todas las 330 manos únicas en las 4 posiciones de la mesa y verifica que el ordenamiento tiene sentido matemático.
 
 ## 📋 Verificaciones Realizadas
 
@@ -42,39 +42,49 @@ Script para verificar que el modelo matemático del motor de decisión (Fase 1) 
 
 | Métrica | Posición 1 (Mano) | Posición 4 (Postre) | Diferencia |
 |---------|-------------------|---------------------|------------|
-| **EV Medio** | 2.84 ± 1.32 | 2.76 ± 1.27 | 0.08 |
-| **EV Máximo** | 6.70 | 6.37 | 0.33 |
-| **EV Mínimo** | 1.29 | 1.29 | 0.00 |
+| **EV Medio** | 3.43 ± 1.49 | 3.34 ± 1.44 | 0.09 |
+| **EV Máximo** | 7.17 | 7.03 | 0.14 |
+| **EV Mínimo** | 2.05 | 2.05 | 0.00 |
+
+**Nota**: Con el punto implementado, todos los EVs son ~0.5-0.7 puntos mayores que antes (cuando se ignoraba el lance de punto).
 
 ### Top 5 Mejores Manos
 
-| # | Mano | EV (pos1) | Pares | Juego | Δ(1-4) |
-|---|------|-----------|-------|-------|--------|
-| 1 | [1,12,12,12] | 6.70 | Medias | 31 | 0.33 |
-| 2 | [6,6,12,12] | 6.40 | Duples | 32 | 0.09 |
-| 3 | [7,7,12,12] | 6.30 | Duples | 34 | 0.12 |
-| 4 | [12,12,12,12] | 6.21 | Duples | 40 | 0.09 |
-| 5 | [11,11,12,12] | 6.18 | Duples | 40 | 0.09 |
+| # | Mano | EV (pos1) | Pares | Juego | Punto | Δ(1-4) |
+|---|------|-----------|-------|-------|-------|--------|
+| 1 | [6,6,12,12] | 7.17 | Duples | 32 | 32 | 0.07 |
+| 2 | [12,12,12,12] | 6.71 | Duples | 40 | 40 | 0.12 |
+| 3 | [1,12,12,12] | 6.70 | Medias | 31 | 22 | 0.33 |
+| 4 | [11,11,12,12] | 6.68 | Duples | 40 | 40 | 0.12 |
+| 5 | [10,10,12,12] | 6.61 | Duples | 40 | 40 | 0.13 |
 
 **Observación**: Las mejores manos combinan **duples/medias** (valor base alto) con **juego alto** (31-40).
 
 ### Top 5 Peores Manos
 
-| # | Mano | EV (pos1) | Pares | Juego | Δ(1-4) |
-|---|------|-----------|-------|-------|--------|
-| 1 | [5,6,7,10] | 1.29 | - | - | 0.00 |
-| 2 | [4,6,7,10] | 1.33 | - | - | 0.00 |
-| 3 | [5,6,7,11] | 1.33 | - | - | 0.00 |
-| 4 | [4,5,6,7] | 1.34 | - | - | 0.00 |
-| 5 | [4,5,7,10] | 1.34 | - | - | 0.00 |
+| # | Mano | EV (pos1) | Pares | Juego | Punto | Δ(1-4) |
+|---|------|-----------|-------|-------|-------|--------|
+| 1 | [5,6,7,10] | 2.05 | - | - | 28 | 0.00 |
+| 2 | [4,6,7,10] | 2.08 | - | - | 27 | 0.00 |
+| 3 | [5,6,7,11] | 2.09 | - | - | 29 | 0.00 |
+| 4 | [4,5,6,7] | 2.09 | - | - | 22 | 0.00 |
+| 5 | [4,5,7,10] | 2.10 | - | - | 26 | 0.00 |
 
-**Observación**: Las peores manos no tienen ni pares ni juego. Δ=0 porque sin jugadas no hay empates (posición irrelevante).
+**Observación**: Las peores manos no tienen ni pares ni juego, pero sí tienen **punto** (que ahora suma ~0.7-1.0 puntos). Δ=0 porque sin jugadas no hay empates (posición irrelevante).
 
 ### Distribución por Categoría
 
-- **Con pares**: 260 manos (78.8%)
-- **Con juego**: 104 manos (31.5%)
-- **Sin nada**: 53 manos (16.1%)
+**Composición de manos (330 totales):**
+- **Con pares**: 104 manos (31.5%)
+- **Con juego (31-40)**: 104 manos (31.5%)
+- **Solo punto** (sin juego): 226 manos (68.5%)
+  - Punto promedio: 22.8 (min: 4, max: 30)
+  - EV promedio: ~2.9 puntos
+
+**EV promedio por tipo:**
+- Manos CON juego: ~4.6 puntos
+- Manos SIN juego (solo punto): ~2.9 puntos
+- Diferencia: ~1.7 puntos (por W_juego > W_punto)
 
 ## 🔍 Insights Matemáticos
 

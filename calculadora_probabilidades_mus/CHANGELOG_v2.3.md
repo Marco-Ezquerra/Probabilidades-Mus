@@ -3,11 +3,81 @@
 > **Fecha**: marzo 2026  
 > **Cambio principal**: Eliminación de heurística lineal, implementación de probabilidades condicionadas exactas  
 > **Corrección 1 (26 feb 2026)**: Valores base de juego y ganancias extra ajustados a reglas reales  
-> **Corrección 2 (26 feb 2026)**: Jerarquía del juego implementada correctamente
+> **Corrección 2 (26 feb 2026)**: Jerarquía del juego implementada correctamente  
+> **Corrección 3 (26 feb 2026)**: ✅ **Punto implementado - FASE 1 COMPLETA**
 
 ---
 
-## 🔥 Corrección CRÍTICA: Jerarquía del Juego (26 feb 2026)
+## ✅ FASE 1 COMPLETADA: Implementación del Punto (26 feb 2026)
+
+### ¿Qué es el Punto?
+
+En el Mus, cuando **ninguno de los 4 jugadores tiene juego (31-40)**, se compara por **Punto**:
+- Suma de las cartas (máximo 10 por carta)
+- Gana el más cercano a 30
+- Vale **1 punto base** (independientemente del valor)
+
+### Implementación
+
+**Lógica separada en `calcular_ev_total()`:**
+```python
+if analisis['tiene_juego']:
+    # Yo tengo juego → usar lógica de juego con jerarquía
+    EV_juego = calcular_ev_propio_condicionado(..., W_juego, ...)
+    EV_punto = 0
+else:
+    # Yo NO tengo juego → puede jugarse punto
+    # Si algún rival tiene juego → pierdo automático (0 puntos)
+    # Si ningún rival tiene juego → se juega punto (W=1)
+    EV_punto = calcular_ev_propio_condicionado(..., W_PUNTO=1.0, ...)
+    EV_juego = 0
+
+EV_total = EV_grande + EV_chica + EV_pares + EV_juego + EV_punto
+```
+
+### Verificación
+
+**Estadísticas con punto implementado:**
+- **Manos SIN juego**: 226/330 (68.5%) → ahora contribuyen con EV_punto
+- **EV promedio sin juego**: 2.93 puntos (antes: 2.33 → +0.60 por punto)
+- **EV promedio con juego**: 4.55 puntos
+
+**Ejemplos:**
+```
+[1,1,12,12] (duples sin juego, punto 22):
+  EV = 6.13 (pares: 3.0 + punto: ~2.0 + grande/chica: ~1.0)
+
+[5,6,7,10] (sin jugadas, punto 28):
+  EV = 2.05 (solo punto: ~1.0 + grande/chica: ~1.0)
+
+[12,12,12,12] (duples + juego 40):
+  EV = 6.71 (pares: 3.0 + juego: ~2.7 + grande: 1.0)
+```
+
+### Impacto
+
+- ✅ **FASE 1 AHORA COMPLETA**: Grande, Chica, Pares, Juego **Y Punto**
+- ✅ Todas las 330 manos tienen EV realista (antes se ignoraba punto)
+- ✅ Manos sin juego ahora valoradas correctamente
+- ✅ Tests pasados: 7/7 ✓
+- ✅ Sanity check: modelo coherente y listo para Fase 2
+
+### Archivos Modificados
+
+1. **motor_decision.py**:
+   - Añadido `W_PUNTO = 1.0` y `E_EXTRA_PUNTO = 0.0`
+   - Modificado `analizar_mano()` para incluir `valor_punto` y `W_punto`
+   - Separado cálculo de juego y punto en `calcular_ev_total()`
+   - Añadido `EV_decision_Punto` al EV total
+
+2. **sanity_check_ev.py**:
+   - Añadidas columnas `valor_punto` y `W_punto` al CSV
+
+3. **Tests**: 7/7 pasados ✅
+
+---
+
+## 🔥 Corrección 2: Jerarquía del Juego (26 feb 2026)
 
 ### Problema Detectado
 
