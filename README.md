@@ -6,20 +6,7 @@ Calculadora de probabilidades para el juego del **Mus** mediante simulación **M
 
 Simula 100.000 partidas por cada mano inicial única, enfrentándola contra dos manos aleatorias generadas con el resto de la baraja. Esto permite estimar con precisión estadística las probabilidades reales de cada mano en cada lance del juego.
 
-## 🃏 Modos de juego
 
-El programa soporta dos modalidades de baraja:
-
-### Modo 4 REYES (tradicional)
-- **Reyes**: 1 (×8 cartas) y 12 (×8 cartas)
-- **Baraja completa**: 1, 4, 5, 6, 7, 10, 11, 12 (40 cartas totales)
-- Este es el modo tradicional del Mus
-
-### Modo 8 REYES
-- **Reyes**: 1 (×8), 2 (×4), 3 (×4 con valor 12), 12 (×8)
-- **Baraja completa**: 1, 2, 4, 5, 6, 7, 10, 11, 12 (40 cartas totales)
-- En este modo: el **2 vale 2** y el **3 vale 12** (cuenta como rey)
-- Hay más reyes en juego, cambiando las probabilidades
 
 ## 🚀 Uso
 
