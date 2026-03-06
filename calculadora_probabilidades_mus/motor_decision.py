@@ -5,8 +5,14 @@ Implementa un agente IA que decide "Cortar" o dar "Mus" basándose en:
 - Soporte estadístico del compañero (desconocido)
 - Política de decisión estocástica (sigmoide) para evitar ser explotable
 
-Versión: 2.3
+Versión: 2.4
 Última actualización: marzo 2026
+
+Cambios v2.4:
+- SIMPLIFICACIÓN: Valores de juego binarios (31=3.0, resto=2.0 uniforme)
+- ELIMINACIÓN: Término EV Soporte Condicionado (se cancela entre equipos)
+- Justificación: En el Mus real todos los juegos excepto 31 valen 2 puntos base
+- Justificación: f_red × P(comp_gana) aplica simétrico a compañero y rivales contrarios
 
 Cambios v2.3:
 - CRÍTICO: Eliminado factor bayesiano heurístico (pesos lineales Rey=4, As=1.5, etc.)
@@ -36,6 +42,7 @@ from calculadoramus import (
     convertir_valor_juego,
     calcular_valor_punto
 )
+from params import FACTOR_K_POS, TASA_MUS_OBJETIVO
 
 
 # ============================================================================
@@ -52,17 +59,16 @@ VALORES_PARES = {
 
 # Valores de juego según jerarquía del Mus
 # Jerarquía: 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33
-# Pesos normalizados: 31=3.0 (mejor), 33=2.0 (peor juego)
-# Fórmula: W = 2.0 + (jerarquía - 1) * (1.0 / 7)
+# En el Mus real: La 31 vale 3 puntos base, el resto de juegos valen 2 puntos base
 VALORES_JUEGO = {
-    31: 3.0,      # Jerarquía 8 (mejor) 
-    32: 2.857,    # Jerarquía 7
-    40: 2.714,    # Jerarquía 6
-    37: 2.571,    # Jerarquía 5
-    36: 2.429,    # Jerarquía 4
-    35: 2.286,    # Jerarquía 3
-    34: 2.143,    # Jerarquía 2
-    33: 2.0       # Jerarquía 1 (peor juego)
+    31: 3.0,  # La 31 (mejor juego)
+    32: 2.0,  # Resto de juegos valen 2 puntos uniformemente
+    40: 2.0,
+    37: 2.0,
+    36: 2.0,
+    35: 2.0,
+    34: 2.0,
+    33: 2.0   # Peor juego pero vale 2 puntos igual que otros
 }
 
 # Valor de punto (cuando nadie tiene juego 31-40)
@@ -75,10 +81,12 @@ E_EXTRA_JUEGO = 0.0
 E_EXTRA_PUNTO = 0.0
 
 # Perfiles predefinidos
+# k_base y percentil_mu ajustados para lograr ~20% de tasa de mus
+# con FACTOR_K_POS position-aware.
 PERFILES = {
-    'conservador': {'beta': 0.65, 'k_base': 2.0, 'sigma': 0.3, 'percentil_mu': 55},
-    'normal': {'beta': 0.75, 'k_base': 2.0, 'sigma': 0.3, 'percentil_mu': 45},
-    'agresivo': {'beta': 0.85, 'k_base': 1.8, 'sigma': 0.4, 'percentil_mu': 30}
+    'conservador': {'beta': 0.65, 'k_base': 1.2, 'sigma': 0.3, 'percentil_mu': 80},
+    'normal': {'beta': 0.75, 'k_base': 1.0, 'sigma': 0.4, 'percentil_mu': 74},
+    'agresivo': {'beta': 0.85, 'k_base': 0.8, 'sigma': 0.5, 'percentil_mu': 65}
 }
 
 
@@ -468,36 +476,11 @@ def calcular_ev_soporte_lineal(mano, prob_yo, estadisticas, lance):
     return P_comp_ajustado * 1.0  # 1 punto base
 
 
-def calcular_ev_soporte_condicionado(mano, tiene_jugada_yo, estadisticas, lance, E_extra):
-    """
-    Calcula EV de soporte del compañero para lances condicionados.
-    
-    Args:
-        mano: Lista de 4 cartas
-        tiene_jugada_yo: bool, si yo tengo la jugada
-        estadisticas: EstadisticasEstaticas
-        lance: 'pares' o 'juego'
-        E_extra: Esperanza de puntos extra
-    
-    Returns:
-        EV_Soporte
-    """
-    if lance == 'pares':
-        prob_comp_tiene = estadisticas.estadisticas_generales['prob_tener_pares']
-        W_comp_estimado = 1.5  # Valor medio de pares
-    else:  # juego
-        prob_comp_tiene = estadisticas.estadisticas_generales['prob_tener_juego']
-        W_comp_estimado = 2.0  # Valor medio de juego
-    
-    # Si yo ya tengo la jugada, el compañero aporta menos
-    if tiene_jugada_yo:
-        factor_reduccion = 0.5
-    else:
-        factor_reduccion = 1.0
-    
-    prob_comp_gana = prob_comp_tiene * 0.6  # 60% de prob de ganar si tiene
-    
-    return factor_reduccion * prob_comp_gana * (W_comp_estimado + E_extra)
+# NOTA: calcular_ev_soporte_condicionado() ELIMINADO
+# Justificación: El factor f_red × P(comp_gana) × 0.6 se aplica tanto al compañero
+# como a los rivales de forma simétrica, cancelándose mutuamente en el cálculo
+# diferencial. No aporta información útil para la decisión.
+# Las llamadas a esta función han sido eliminadas de calcular_ev_total().
 
 
 # ============================================================================
@@ -549,10 +532,9 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
     else:
         EV_propio_P = 0.0
     
-    EV_soporte_P = calcular_ev_soporte_condicionado(
-        mano, analisis['tiene_pares'], estadisticas, 'pares', E_EXTRA_PARES
-    )
-    EV_decision_P = EV_propio_P + (beta * EV_soporte_P)
+    # EV_soporte_P eliminado (se cancela con rivales)
+    EV_soporte_P = 0.0  # Mantenido para compatibilidad con desglose
+    EV_decision_P = EV_propio_P
     
     # --- JUEGO Y PUNTO (Condicionado) ---
     # El lance de "Juego" incluye dos casos:
@@ -571,10 +553,9 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
             estadisticas,
             posicion
         )
-        EV_soporte_J = calcular_ev_soporte_condicionado(
-            mano, analisis['tiene_juego'], estadisticas, 'juego', E_EXTRA_JUEGO
-        )
-        EV_decision_J = EV_propio_J + (beta * EV_soporte_J)
+        # EV_soporte_J eliminado (se cancela con rivales)
+        EV_soporte_J = 0.0  # Mantenido para compatibilidad con desglose
+        EV_decision_J = EV_propio_J
         EV_propio_Punto = 0.0  # No se juega punto si tengo juego
         EV_soporte_Punto = 0.0
         EV_decision_Punto = 0.0
@@ -595,14 +576,11 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
             posicion
         )
         
-        # Soporte del compañero (puede tener juego o no)
-        EV_soporte_Punto = calcular_ev_soporte_condicionado(
-            mano, False, estadisticas, 'juego', E_EXTRA_PUNTO
-        )
-        
-        EV_decision_Punto = EV_propio_Punto + (beta * EV_soporte_Punto)
+        # EV_soporte_Punto eliminado (se cancela con rivales)
+        EV_soporte_Punto = 0.0  # Mantenido para compatibilidad con desglose
+        EV_decision_Punto = EV_propio_Punto
         EV_propio_J = 0.0  # No tengo juego
-        EV_soporte_J = 0.0
+        EV_soporte_J = 0.0  # Mantenido para compatibilidad con desglose
         EV_decision_J = 0.0
     
     # --- EV TOTAL ---
@@ -694,6 +672,10 @@ def decidir_cortar(mano, estadisticas, mu, k_base=2.0, sigma=0.3, beta=0.7, posi
     """
     Decide si cortar o dar mus usando función sigmoide estocástica.
     
+    El parámetro k se ajusta por posición: las posiciones 1 y 3 (equipo Mano)
+    tienen un k menor (más probabilidad de dar mus) porque se benefician de
+    los descartes sucesivos. Esto refleja el comportamiento real del juego.
+    
     Args:
         mano: Lista de 4 cartas
         estadisticas: EstadisticasEstaticas
@@ -712,8 +694,13 @@ def decidir_cortar(mano, estadisticas, mu, k_base=2.0, sigma=0.3, beta=0.7, posi
     # Calcular EV de la mano
     EV_total, desglose = calcular_ev_total(mano, estadisticas, beta, posicion)
     
-    # Agresividad estocástica (ruido gaussiano)
-    K = np.random.normal(k_base, sigma)
+    # Ajuste de k por posición (position-aware)
+    # Posiciones 1 y 3 tienen factor < 1.0 → k menor → más mus
+    factor_pos = FACTOR_K_POS.get(posicion, 1.0)
+    k_ajustado = k_base * factor_pos
+    
+    # Agresividad estocástica (ruido gaussiano sobre k ajustado)
+    K = np.random.normal(k_ajustado, sigma)
     K = max(K, 0.5)  # Evitar valores negativos o muy pequeños
     
     # Probabilidad de cortar (función sigmoide)
@@ -729,6 +716,124 @@ def decidir_cortar(mano, estadisticas, mu, k_base=2.0, sigma=0.3, beta=0.7, posi
 
 
 # ============================================================================
+# CALIBRACIÓN AUTOMÁTICA DE TASA DE MUS
+# ============================================================================
+
+def estimar_tasa_mus(estadisticas, percentil, k_base, sigma, beta, n_muestras=5000):
+    """
+    Estima la tasa de mus (probabilidad de que los 4 jugadores den mus)
+    para un percentil_mu dado, simulando n_muestras repartos.
+    
+    Args:
+        estadisticas: EstadisticasEstaticas
+        percentil: Percentil para calibrar mu
+        k_base: Agresividad base
+        sigma: Ruido gaussiano
+        beta: Factor de confianza
+        n_muestras: Número de simulaciones rápidas
+    
+    Returns:
+        float: Tasa de mus estimada [0, 1]
+    """
+    from calculadoramus import inicializar_baraja
+    import random
+    
+    mu = calibrar_umbral_mu(estadisticas, percentil=percentil, beta=beta, silent=True)
+    baraja = inicializar_baraja(estadisticas.modo_8_reyes)
+    
+    universos_mus = 0
+    for _ in range(n_muestras):
+        baraja_temp = baraja.copy()
+        random.shuffle(baraja_temp)
+        
+        manos = {}
+        for pos in [1, 2, 3, 4]:
+            manos[pos] = sorted(baraja_temp[:4], reverse=True)
+            baraja_temp = baraja_temp[4:]
+        
+        todos_mus = True
+        for pos in [1, 2, 3, 4]:
+            decision, _, _, _ = decidir_cortar(
+                manos[pos], estadisticas, mu,
+                k_base=k_base, sigma=sigma, beta=beta, posicion=pos
+            )
+            if decision:  # Corta
+                todos_mus = False
+                break
+        
+        if todos_mus:
+            universos_mus += 1
+    
+    return universos_mus / n_muestras
+
+
+def calibrar_percentil_para_tasa_objetivo(estadisticas, k_base, sigma, beta,
+                                           tasa_objetivo=None, tolerancia=0.02,
+                                           max_iter=15, n_muestras=5000, silent=False):
+    """
+    Busca el percentil_mu que produce la tasa de mus objetivo mediante
+    búsqueda binaria.
+    
+    Args:
+        estadisticas: EstadisticasEstaticas
+        k_base: Agresividad base
+        sigma: Ruido gaussiano
+        beta: Factor de confianza
+        tasa_objetivo: Tasa de mus objetivo (default: TASA_MUS_OBJETIVO de params)
+        tolerancia: Margen aceptable alrededor del objetivo
+        max_iter: Máximo de iteraciones de búsqueda binaria
+        n_muestras: Muestras por estimación
+        silent: Suprimir mensajes
+    
+    Returns:
+        int: percentil_mu calibrado
+    """
+    if tasa_objetivo is None:
+        tasa_objetivo = TASA_MUS_OBJETIVO
+    
+    if not silent:
+        print(f"\n🎯 Calibrando percentil_mu para tasa de mus objetivo: {tasa_objetivo:.0%}")
+        print(f"   (k_base={k_base}, sigma={sigma}, beta={beta})")
+    
+    # Búsqueda binaria: percentil alto → mu alto → más manos bajo mu → más mus
+    lo, hi = 10, 95
+    mejor_percentil = 60
+    mejor_diferencia = float('inf')
+    
+    for i in range(max_iter):
+        mid = (lo + hi) // 2
+        tasa = estimar_tasa_mus(estadisticas, mid, k_base, sigma, beta, n_muestras)
+        diferencia = abs(tasa - tasa_objetivo)
+        
+        if not silent:
+            print(f"   Iter {i+1}: percentil={mid}, tasa_mus={tasa:.1%} (objetivo: {tasa_objetivo:.0%})")
+        
+        if diferencia < mejor_diferencia:
+            mejor_diferencia = diferencia
+            mejor_percentil = mid
+        
+        if diferencia <= tolerancia:
+            if not silent:
+                print(f"   ✓ Convergió: percentil={mid} → tasa={tasa:.1%}")
+            return mid
+        
+        if tasa < tasa_objetivo:
+            # Necesitamos más mus → percentil más alto → mu más alto
+            lo = mid + 1
+        else:
+            # Demasiado mus → percentil más bajo → mu más bajo
+            hi = mid - 1
+        
+        if lo > hi:
+            break
+    
+    if not silent:
+        print(f"   ⚠ No convergió exactamente. Mejor: percentil={mejor_percentil}")
+    
+    return mejor_percentil
+
+
+# ============================================================================
 # CLASE PRINCIPAL: MOTOR DE DECISIÓN
 # ============================================================================
 
@@ -738,7 +843,7 @@ class MotorDecisionMus:
     Gestiona la carga de estadísticas, calibración y toma de decisiones.
     """
     
-    def __init__(self, modo_8_reyes=False, perfil='normal', silent=False):
+    def __init__(self, modo_8_reyes=False, perfil='normal', silent=False, auto_calibrar_tasa=False):
         """
         Inicializa el motor de decisión.
         
@@ -746,6 +851,8 @@ class MotorDecisionMus:
             modo_8_reyes: bool, True para 8 reyes, False para 4 reyes
             perfil: 'conservador', 'normal', 'agresivo'
             silent: bool, True para suprimir mensajes de inicialización
+            auto_calibrar_tasa: bool, si True ajusta percentil_mu automáticamente
+                                para alcanzar TASA_MUS_OBJETIVO
         """
         if perfil not in PERFILES:
             raise ValueError(f"Perfil '{perfil}' no válido. Usa: {list(PERFILES.keys())}")
@@ -760,6 +867,19 @@ class MotorDecisionMus:
             print(f"Cargando estadísticas ({4 if not modo_8_reyes else 8} reyes, perfil: {perfil})...")
         self.estadisticas = EstadisticasEstaticas(modo_8_reyes)
         
+        # Calibración automática de percentil_mu para tasa de mus objetivo
+        if auto_calibrar_tasa:
+            percentil_calibrado = calibrar_percentil_para_tasa_objetivo(
+                self.estadisticas,
+                k_base=self.params['k_base'],
+                sigma=self.params['sigma'],
+                beta=self.params['beta'],
+                silent=silent
+            )
+            self.params['percentil_mu'] = percentil_calibrado
+            if not silent:
+                print(f"   percentil_mu ajustado a {percentil_calibrado} (antes: {PERFILES[perfil]['percentil_mu']})")
+        
         # Calibrar umbral μ
         self.mu = calibrar_umbral_mu(
             self.estadisticas,
@@ -769,7 +889,7 @@ class MotorDecisionMus:
         )
         
         if not silent:
-            print(f"✓ Motor de decisión listo\n")
+            print(f"✓ Motor de decisión listo (μ={self.mu:.4f})\n")
     
     def decidir(self, mano, posicion=1):
         """

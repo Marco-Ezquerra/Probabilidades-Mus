@@ -1,7 +1,7 @@
-# Motor de Decisión Mus - Fase 1 COMPLETA ✅
+# Motor de Decisión Mus - Fase 1 y Fase 2
 
-> **Versión**: 2.3 (febrero 2026)  
-> **Estado**: Fase 1 completada y verificada  
+> **Versión**: 2.4 (marzo 2026)  
+> **Estado**: Fase 1 completada y verificada ✅ | Fase 2 lista para ejecutar 🚀  
 > **Lances modelados**: Grande, Chica, Pares, Juego y **Punto**
 
 ---

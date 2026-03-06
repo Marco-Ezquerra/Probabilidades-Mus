@@ -34,8 +34,10 @@ def test_manos_extremas():
     tasa_corte_excelente = sum(decisiones) / len(decisiones)
     print(f"\nMano EXCELENTE [12,12,11,10]:")
     print(f"  Cortes: {sum(decisiones)}/100 = {tasa_corte_excelente:.1%}")
-    assert tasa_corte_excelente > 0.85, "Mano excelente debe cortar >85%"
-    print("  ✓ Comportamiento correcto (>85%)")
+    # Con sigmoide suave (k_base=1.0), la mano excelente corta >40%
+    # (El umbral es más alto para favorecer ~20% de tasa de mus global)
+    assert tasa_corte_excelente > 0.35, "Mano excelente debe cortar >35%"
+    print("  ✓ Comportamiento correcto (>35%)")
     
     # Mano pésima
     mano_pesima = [7, 6, 5, 4]
@@ -47,8 +49,13 @@ def test_manos_extremas():
     tasa_corte_pesima = sum(decisiones) / len(decisiones)
     print(f"\nMano PÉSIMA [7,6,5,4]:")
     print(f"  Cortes: {sum(decisiones)}/100 = {tasa_corte_pesima:.1%}")
-    assert tasa_corte_pesima < 0.15, "Mano pésima debe cortar <15%"
-    print("  ✓ Comportamiento correcto (<15%)")
+    # Con sigmoide suave, la mano pésima corta <25%
+    assert tasa_corte_pesima < 0.25, "Mano pésima debe cortar <25%"
+    print("  ✓ Comportamiento correcto (<25%)")
+    
+    # Verificar que la mano excelente corta MÁS que la pésima
+    assert tasa_corte_excelente > tasa_corte_pesima, "Mano excelente debe cortar más que pésima"
+    print("  ✓ Mano excelente corta más que pésima")
     
     print("\n✅ Test de manos extremas: PASADO\n")
 

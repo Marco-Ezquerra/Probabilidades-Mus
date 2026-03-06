@@ -1,26 +1,60 @@
-# 🎴 Sistema de Análisis de Mus - Fase 1 COMPLETA ✅
+# 🎴 Sistema de Análisis de Mus - Motor IA y Simulador
 
 Sistema completo de análisis probabilístico y toma de decisiones para el juego del **Mus**, implementado con **simulación Monte Carlo**, análisis dinámico condicionado y motor de decisión basado en **Valor Esperado (EV)** con fundamentos matemáticos rigurosos.
 
-> **Estado**: Fase 1 cerrada (febrero 2026)  
-> **Versión**: v2.3  
+> **Versión**: v2.4 (Marzo 2026)  
+> **Estado**: Fase 1 completa ✅ | Fase 2 lista para ejecutar 🚀  
+> **Autor**: Marco Ezquerra  
 > **Lances**: Grande, Chica, Pares, Juego y Punto
+
+---
+
+## 🎯 Características Principales
+
+- ✅ **Simulación Monte Carlo** con 50,000-100,000 iteraciones por mano
+- ✅ **Motor de decisión IA** basado en Valor Esperado (EV) matemático
+- ✅ **Desempates exactos** por posición en la mesa (1 > 2 > 3 > 4)
+- ✅ **Lance de Punto** implementado (cuando nadie tiene juego)
+- ✅ **Política estocástica** (sigmoide) para evitar ser explotable
+- ✅ **3 perfiles de juego**: Conservador, Normal, Agresivo
+- ✅ **Fase 2 preparada**: Sistema de Q-Learning para políticas de descarte
+- 🆕 **Tracking de descartes**: Información bayesiana para simulaciones avanzadas
 
 ---
 
 ## 🚀 Inicio Rápido
 
+### Instalación
+
 ```bash
-# 1. Instalar dependencias
+# Clonar repositorio
+git clone https://github.com/Marco-Ezquerra/Probabilidades-Mus
+cd Probabilidades-Mus
+
+# Instalar dependencias
 pip install -r requirements.txt
+```
 
-# 2. Demo interactiva (recomendado para empezar)
-python3 demo_interactiva.py
+### Demo Interactiva (Recomendado)
 
-# 3. Tests de validación
-python3 test_baraja.py
-python3 test_motor_decision.py
-python3 test_simulador_dinamico.py
+```bash
+python3 demos/demo_interactiva.py
+```
+
+### Ejecutar Tests
+
+```bash
+# Tests del motor de decisión
+python3 tests/test_motor_decision.py
+
+# Tests de evaluación de ronda
+python3 tests/test_evaluador_ronda.py
+
+# Tests de descarte heurístico
+python3 tests/test_descarte_heuristico.py
+
+# Tests de tracking de descartes
+python3 tests/test_tracking_descartes.py
 ```
 
 ---
@@ -29,286 +63,285 @@ python3 test_simulador_dinamico.py
 
 ```
 Probabilidades-Mus/
-├── calculadora_probabilidades_mus/    # 📦 Módulo principal
-│   ├── calculadoramus.py              # Monte Carlo: estadísticas precalculadas
-│   ├── simular_dinamico.py            # Simulación condicionada (con compañero)
-│   ├── motor_decision.py              # Motor IA de decisión (CORTAR/MUS)
-│   ├── resultados_4reyes.csv          # Dataset: estadísticas modo tradicional
-│   ├── resultados_8reyes.csv          # Dataset: estadísticas modo 8 reyes
-│   ├── calibracion_mu.json            # Caché: umbrales calibrados por perfil
+├── 📁 calculadora_probabilidades_mus/   # Módulo principal
+│   ├── calculadoramus.py                # Simulación Monte Carlo (Fase 1)
+│   ├── motor_decision.py                # Motor IA de decisión (CORTAR/MUS)
+│   ├── simular_dinamico.py              # Simulación condicionada
+│   ├── evaluador_ronda.py               # Evaluación de lances y puntuación
+│   ├── generar_politicas_rollout.py     # Q-Learning para descartes (Fase 2)
+│   ├── simulador_fase2.py               # Simulador con políticas óptimas
+│   ├── params.py                        # Configuración centralizada
+│   ├── sanity_check_ev.py               # Verificación de coherencia
 │   │
-│   ├── README.md                      # 📖 Doc: guía del módulo
-│   ├── FUNDAMENTOS_MATEMATICOS.md     # 📐 Doc: formulación matemática
-│   ├── CHANGELOG_v2.3.md              # 📝 Doc: historial de cambios
-│   └── SANITY_CHECK_README.md         # 🔍 Doc: verificación de coherencia
+│   ├── resultados_8reyes.csv            # Dataset: 331 manos únicas (8 reyes)
+│   ├── resultados_4reyes.csv            # Dataset: 716 manos únicas (4 reyes)
+│   ├── calibracion_mu.json              # Caché: umbrales calibrados
+│   ├── politicas_optimas_fase2.csv      # Políticas de descarte (generadas)
+│   ├── probabilidades_fase2.csv         # Probabilidades post-descarte
+│   │
+│   └── README.md                        # Documentación del módulo
 │
-├── demo_interactiva.py                # 🎮 Demo: interfaz interactiva completa
-├── test_*.py                          # ✅ Tests unitarios
-├── validar_proyecto.py                # 🔍 Validador del sistema completo
-└── utils/                             # 🛠️ Scripts auxiliares
-    └── ordenartabla.py                # Análisis y ordenamiento de CSVs
+├── 📁 docs/                             # Documentación técnica
+│   ├── CHANGELOG_v2.4.md                # Historial de cambios v2.4
+│   ├── CHANGELOG_v2.3.md                # Historial de cambios v2.3
+│   ├── FUNDAMENTOS_MATEMATICOS.md       # Formulación matemática completa
+│   ├── README_FASE2.md                  # Guía de la Fase 2 (Q-Learning)
+│   ├── DESEMPATES_MATEMATICOS.md        # Explicación de desempates
+│   ├── ESTIMACION_N_MUESTRAL.md         # Cálculo de iteraciones necesarias
+│   ├── SANITY_CHECK_README.md           # Guía de verificación
+│   ├── TABLA_MAESTRA_EV.md              # Ranking completo de manos
+│   └── interpretacion_politicas.txt     # Análisis de políticas generadas
+│
+├── 📁 tests/                            # Suite de tests
+│   ├── test_motor_decision.py           # Tests del motor de decisión
+│   ├── test_evaluador_ronda.py          # Tests de evaluación de lances
+│   ├── test_descarte_heuristico.py      # Tests de heurística de descartes
+│   ├── test_tracking_descartes.py       # Tests de tracking de descartes
+│   ├── test_baraja.py                   # Tests de baraja y combinaciones
+│   ├── test_mascaras.py                 # Tests de máscaras de descarte
+│   └── test_simulador_dinamico.py       # Tests de simulación dinámica
+│
+├── 📁 demos/                            # Scripts de demostración
+│   ├── demo_interactiva.py              # Demo interactiva completa
+│   ├── demo_fase2.py                    # Demo de Fase 2 (descartes)
+│   ├── diagnostico_mus.py               # Diagnóstico del sistema
+│   └── validar_proyecto.py              # Validador completo
+│
+├── 📁 utils/                            # Utilidades
+│   ├── mascaras_descarte.py             # Gestión de máscaras de descarte
+│   ├── descarte_heuristico.py           # Heurística baseline de descartes
+│   └── ordenartabla.py                  # Análisis y ordenamiento de CSVs
+│
+├── 📁 logs/                             # Logs de ejecución (generados)
+│   ├── generacion_politicas.log         # Logs de generación de políticas
+│   └── simulacion_fase2.log             # Logs de simulaciones
+│
+├── README.md                            # Este archivo
+├── requirements.txt                     # Dependencias del proyecto
+└── .gitignore                           # Archivos ignorados por Git
 ```
 
 ---
 
-## 🎯 Componentes del Sistema
+## 🎮 Componentes del Sistema
 
-### 1️⃣ Probabilidades Estáticas (Monte Carlo)
+### 1️⃣ Fase 1: Motor de Decisión (Primeras Dadas)
 
-**Archivo:** `calculadoramus.py`
+**Objetivo:** Decidir si **CORTAR** o dar **MUS** en las primeras dadas basándose en el Valor Esperado (EV) matemático de la mano.
 
-Simula **50,000-100,000 partidas** por cada mano inicial única, enfrentándola contra dos manos aleatorias. Genera tablas precalculadas con probabilidades a priori para cada lance.
-
-```bash
-cd calculadora_probabilidades_mus
-python3 calculadoramus.py
-```
-
-**Salida:**
-- `resultados_4reyes.csv`: 716 manos únicas en modo tradicional
-- `resultados_8reyes.csv`: 331 manos únicas en modo 8 reyes
-
-**Columnas del CSV:**
-- `probabilidad_grande`: P(ganar Grande) [0,1]
-- `probabilidad_chica`: P(ganar Chica) [0,1]
-- `probabilidad_pares`: P(ganar Pares) [0,1]
-- `probabilidad_juego`: P(ganar Juego/Punto) [0,1]
-
----
-
-### 2️⃣ Simulación Dinámica (Condicionada)
-
-**Archivo:** `simular_dinamico.py`
-
-Calcula probabilidades **condicionadas** cuando conoces las 8 cartas de tu pareja (tú + compañero). Son probabilidades *a posteriori* que incorporan información adicional.
-
-**Uso:**
-```python
-from simular_dinamico import simular_con_companero
-from calculadoramus import inicializar_baraja
-
-baraja = inicializar_baraja(modo_8_reyes=True)
-tu_mano = [12, 12, 11, 10]
-mano_companero = [1, 1, 1, 1]
-
-resultado = simular_con_companero(tu_mano, mano_companero, baraja, iteraciones=50000)
-# Retorna: {'probabilidad_grande', 'probabilidad_chica', 'probabilidad_pares', 'probabilidad_juego'}
-```
-
-**Diferencia clave:**
-- **Estáticas**: P(ganar | mi mano) - No sé qué tiene el compañero
-- **Dinámicas**: P(ganar | mi mano, mano compañero) - Sé qué tiene el compañero
-
----
-
-### 3️⃣ Motor de Decisión IA
-
-**Archivo:** `motor_decision.py`
-
-Motor de IA que decide **CORTAR** o dar **MUS** en primeras dadas basándose en Valor Esperado (EV) y teoría de juegos.
-
-#### 🧠 Fundamentos Matemáticos
-
-**Modelo de Valor Esperado:**
-```
-EV_Total = EV_Propio + β · EV_Soporte
-
-EV_Propio  = Σ (valor del lance considerando probabilidad de victoria)
-EV_Soporte = Σ (valor esperado de la contribución del compañero)
-β ∈ [0.65, 0.85] = Factor de confianza en el compañero
-```
-
-**Política de Decisión (Sigmoide):**
-```
-P(Cortar) = sigmoid(K · (EV - μ))
-
-donde:
-  K ~ N(k_base, σ²) = Componente estocástico (evita ser explotable)
-  μ = Umbral calibrado por perfil (percentil de distribución de EVs)
-```
-
-#### 🎮 Tres Perfiles
-
-| Perfil      | β (confianza) | μ (percentil) | Comportamiento           |
-|-------------|---------------|---------------|--------------------------|
-| Conservador | 0.65          | P55           | Corta solo con EVs altos |
-| Normal      | 0.75          | P45           | Equilibrado              |
-| Agresivo    | 0.85          | P30           | Toma más riesgos         |
-
-#### 🔬 Mejoras Matemáticas v2.0
-
-Implementadas en **26/02/2026** (ver [CHANGELOG_v2.3.md](calculadora_probabilidades_mus/CHANGELOG_v2.3.md)):
-
-1. **Percentiles CDF para P(yo|RL)**: Usa ranking real en lugar de probabilidad general
-2. **Factor Bayesiano**: Modelado del efecto de remoción de cartas
-   - Peso de mano: 12=4pts, 11=2.5pts, 1=1.5pts, 10=1pts
-   - Factor ∈ [0.7, 1.3]: Mano pesada reduce prob. compañero, ligera la aumenta
-3. **Eliminación de descuentos artificiales**: EVs matemáticamente consistentes
+**Archivos principales:**
+- `calculadoramus.py`: Generación de probabilidades base (Monte Carlo)
+- `motor_decision.py`: Motor de decisión IA (EV + política estocástica)
 
 **Uso:**
 ```python
 from motor_decision import MotorDecisionMus
 
 motor = MotorDecisionMus(modo_8_reyes=True, perfil='normal')
-mano = [1, 1, 1, 10]
+mano = [12, 12, 10, 10]  # Duples Rey-Sota
 
-decision, prob_corte, ev, desglose = motor.decidir(mano)
-# decision: bool (True=CORTAR, False=MUS)
-# prob_corte: float [0,1] (Probabilidad de cortar)
-# ev: float (Valor esperado total)
-# desglose: dict (EV por lance y componentes)
+decision, probabilidad, ev, desglose = motor.decidir(mano, posicion=1)
+
+print(f"Decisión: {'CORTAR' if decision else 'MUS'}")
+print(f"Probabilidad de cortar: {probabilidad:.1%}")
+print(f"EV total: {ev:.2f} puntos")
+```
+
+**Fundamentos matemáticos:**
+```
+EV_Total = EV_Grande + EV_Chica + EV_Pares + EV_Juego + EV_Punto
+
+EV_Lance = P(yo gano) × W_lance × (1 + factor_posición)
+
+P(Cortar) = sigmoid(K × (EV - μ))
+  donde:
+    K ~ N(k_base, σ²) = Componente estocástico
+    μ = Umbral calibrado por perfil
+```
+
+**Perfiles disponibles:**
+- **Conservador**: β=0.65, μ=percentil 80 → Corta solo con EVs altos
+- **Normal**: β=0.75, μ=percentil 74 → Equilibrado
+- **Agresivo**: β=0.85, μ=percentil 65 → Toma más riesgos
+
+---
+
+### 2️⃣ Fase 2: Políticas de Descarte (Q-Learning)
+
+**Objetivo:** Determinar la estrategia óptima de descarte mediante simulaciones de rollout (partida completa) y medición de puntos reales obtenidos.
+
+**Archivos principales:**
+- `generar_politicas_rollout.py`: Generación de políticas mediante Q-Learning
+- `simulador_fase2.py`: Simulador con políticas óptimas
+- `evaluador_ronda.py`: Evaluación de 4 lances + puntuación real
+
+**Sistema de puntuación:**
+- **Grande/Chica**: 1 punto fijo para el equipo ganador
+- **Pares**: Suma de valores base de AMBOS miembros del equipo ganador
+  - Sin pares: 0, Pares: 1, Medias: 2, Duples: 3
+- **Juego**: Suma de valores base de AMBOS miembros del equipo ganador
+  - La 31: 3 puntos, Resto de juegos: 2 puntos
+- **Punto**: 1 punto (cuando nadie tiene juego)
+
+**Tracking de descartes (v2.4):**
+- Captura cuántas cartas descarta cada jugador en cada ronda
+- Información almacenada en CSV de políticas: `n_descarte_j1`, `n_descarte_j2`, etc.
+- Habilita actualizaciones bayesianas para simulaciones de segundas dadas
+
+**Para ejecutar (ver GUIA_EJECUCION.md):**
+```bash
+cd calculadora_probabilidades_mus
+python3 generar_politicas_rollout.py
 ```
 
 ---
 
-## 🃏 Modos de Juego
+### 3️⃣ Sistema de Evaluación de Rondas
 
-### Modo 4 REYES (Tradicional)
-- **Reyes**: 1 (×8) y 12 (×8)
-- **Baraja**: 1, 4, 5, 6, 7, 10, 11, 12 (40 cartas)
+**Archivo:** `evaluador_ronda.py`
 
-### Modo 8 REYES
-- **Reyes**: 1 (×8), 2 (×4), 3 (×4 vale 12), 12 (×8)
-- **Baraja**: 1, 2, 4, 5, 6, 7, 10, 11, 12 (40 cartas)
-- **Nota**: El 2 vale 2, el 3 vale 12
+Evalúa una ronda completa con los 4 lances y calcula puntos reales por equipo según las reglas oficiales del Mus.
+
+**Características:**
+- Desempates estrictos por posición (1 > 2 > 3 > 4)
+- Puntuación por equipos (A: posiciones 1+3, B: posiciones 2+4)
+- Suma de puntos base de AMBOS miembros del equipo ganador
+- Lance de Punto implementado (cuando nadie tiene juego)
 
 ---
 
-## 🧪 Tests y Validación
+## 📊 Datasets Generados
+
+### `resultados_8reyes.csv` (331 manos únicas)
+Estadísticas precomputadas para el modo de 8 reyes (más jugado).
+
+### `politicas_optimas_fase2.csv` (generado en Fase 2)
+Políticas óptimas de descarte para cada (mano, posición, máscara).
+
+**Estructura:**
+```csv
+mano,posicion,mascara_idx,reward_promedio,n_visitas,n_descarte_j1,n_descarte_j2,n_descarte_j3,n_descarte_j4
+[4,6,11,12],1,0,-2.34,1582,1.2,2.8,3.1,1.5
+```
+
+---
+
+## 🔬 Verificación y Tests
+
+### Suite de Tests Completa
 
 ```bash
-# Test individual de cada componente
-python3 test_baraja.py              # Valida inicialización y reglas de baraja
-python3 test_motor_decision.py      # Valida motor IA y cálculos de EV
-python3 test_simulador_dinamico.py  # Valida simulaciones dinámicas
+# Test 1: Motor de desempates (7 tests)
+python3 tests/test_motor_decision.py
 
-# Validación completa del sistema
-python3 validar_proyecto.py
+# Test 2: Evaluador de ronda (6 tests)
+python3 tests/test_evaluador_ronda.py
+
+# Test 3: Descarte heurístico (7 tests)
+python3 tests/test_descarte_heuristico.py
+
+# Test 4: Tracking de descartes (integración)
+python3 tests/test_tracking_descartes.py
 ```
 
----
-
-## 📊 Demo Interactiva
+### Sanity Check (Coherencia Matemática)
 
 ```bash
-python3 demo_interactiva.py
+cd calculadora_probabilidades_mus
+python3 sanity_check_ev.py
 ```
 
-**Opciones disponibles:**
-1. **Análisis Estático**: Consulta probabilidades precalculadas
-2. **Simulación Dinámica**: Simula con mano del compañero conocida
-3. **Motor IA**: Decisión CORTAR/MUS con los 3 perfiles
-4. **Análisis Detallado**: Razonamiento completo del motor (EV desglosado)
-5. **Comparación Completa**: Compara los 3 sistemas sobre la misma mano
+Verifica:
+- EVs de todas las 331 manos en 4 posiciones
+- Coherencia entre posiciones
+- Ranking de manos por EV
+- Impacto de desempates
 
 ---
 
-## 🛣️ Roadmap: Próximas Fases
+## 📈 Novedades v2.4 (Marzo 2026)
 
-### ✅ Fase 1: Primeras Dadas (COMPLETADO)
-- ✅ Estadísticas Monte Carlo
-- ✅ Simulador dinámico con compañero
-- ✅ Motor de decisión IA con mejoras matemáticas v2.0
-- ✅ Tres perfiles (conservador/normal/agresivo)
+### 🎯 Simplificación de Valores Beta
 
-### 🚧 Fase 2: Segundas Dadas (EN DESARROLLO)
-- [ ] **Estadísticas condicionadas a mus**: P(ganar | hubo mus, descarté X cartas)
-- [ ] **Optimizador de descarte**: ¿Qué cartas descartar para maximizar EV?
-- [ ] **Motor de decisión extendido**: Decisión CORTAR/MUS en segundas dadas
-- [ ] **Análisis de información**: Inferencia bayesiana sobre manos rivales
+**Antes:** Escala continua (31=3.0, 32=2.857, 40=2.714, ..., 33=2.0)  
+**Ahora:** Sistema binario (31=3.0, resto=2.0)
 
-**Implementación prevista:**
-```python
-# Nuevo módulo: segundas_dadas.py
-def calcular_probabilidades_tras_mus(mano_original, cartas_descartadas, baraja):
-    """
-    Calcula P(ganar | hubo mus, descarté X cartas, recibí Y nuevas)
-    Considera el efecto de remoción de cartas y distribución actualizada.
-    """
-    pass
+**Justificación:** En el Mus real, la 31 vale 3 puntos y el resto de juegos valen 2 puntos uniformemente. Las jerarquías se resuelven por comparación directa.
 
-def optimizar_descarte(mano, estadisticas, n_descartar):
-    """
-    Encuentra la combinación óptima de descarte para maximizar EV.
-    Usa programación dinámica o búsqueda exhaustiva.
-    """
-    pass
+### ❌ Eliminación de EV Soporte Condicionado
+
+**Removido:** Término `f_red × P(comp_gana) × 0.6`
+
+**Justificación:** Este factor se aplica simétricamente tanto al compañero como a los rivales del equipo contrario, cancelándose en el cálculo diferencial. No aporta información útil para la decisión.
+
+### 📊 Sistema de Tracking de Descartes
+
+**Nuevo:** Captura información sobre cuántas cartas descarta cada jugador.
+
+**Beneficios:**
+- Permite actualización bayesiana de probabilidades en segundas dadas
+- Habilita detección de patrones de juego subóptimos
+- Información almacenada en CSV de políticas para uso futuro
+
+**Ver detalles completos:** [docs/CHANGELOG_v2.4.md](docs/CHANGELOG_v2.4.md)
+
+---
+
+## 📚 Documentación Adicional
+
+- **[docs/FUNDAMENTOS_MATEMATICOS.md](docs/FUNDAMENTOS_MATEMATICOS.md)**: Formulación matemática completa del sistema
+- **[docs/README_FASE2.md](docs/README_FASE2.md)**: Guía detallada de la Fase 2 (Q-Learning)
+- **[docs/CHANGELOG_v2.4.md](docs/CHANGELOG_v2.4.md)**: Historial completo de cambios v2.4
+- **[docs/DESEMPATES_MATEMATICOS.md](docs/DESEMPATES_MATEMATICOS.md)**: Explicación de desempates por posición
+- **[docs/TABLA_MAESTRA_EV.md](docs/TABLA_MAESTRA_EV.md)**: Ranking completo de 331 manos por EV
+
+---
+
+## 🛠️ Requisitos del Sistema
+
+### Software
+- Python 3.8+
+- Librerías: `numpy`, `pandas`, `tqdm`
+
+### Hardware (para Fase 2: Generación de Políticas)
+- **CPU**: Recomendado multi-core (8+ cores)
+- **RAM**: Mínimo 8 GB, recomendado 16 GB
+- **Almacenamiento**: ~500 MB para datasets y políticas
+- **Tiempo estimado**: 8-12 horas con 40M iteraciones
+
+---
+
+## 👤 Autor y Contacto
+
+**Marco Ezquerra**  
+**Repositorio**: [GitHub.com/Marco-Ezquerra/Probabilidades-Mus](https://github.com/Marco-Ezquerra/Probabilidades-Mus)  
+**Versión actual**: v2.4 (Marzo 2026)
+
+---
+
+## 📄 Licencia
+
+Este proyecto es de código abierto. Consulta el archivo LICENSE para más detalles.
+
+---
+
+## 🎉 Próximos Pasos
+
+### Para ejecutar la Fase 2 (Generación de Políticas):
+
+1. ✅ Estructura organizada
+2. ✅ Tests pasados (20/20)
+3. ✅ Documentación actualizada
+4. 🚀 **Listo para ejecutar:** Ver [GUIA_EJECUCION.md](GUIA_EJECUCION.md)
+
+```bash
+cd calculadora_probabilidades_mus
+python3 generar_politicas_rollout.py
 ```
 
-### 🔮 Fase 3: Juego Completo (PLANIFICADO)
-- [ ] Estrategia de envites (órdago, paso, quiero, no quiero)
-- [ ] Faroles y detección de faroles
-- [ ] Gestión de puntuación y riesgo
+**Configuración actual:**
+- `N_ITERACIONES_ROLLOUT = 40_000_000` (40M iteraciones)
+- `MODO_8_REYES = True`
+- Multiprocessing activado (usa todos los cores disponibles)
 
----
-
-## 📚 Documentación
-
-Toda la documentación está en el módulo `calculadora_probabilidades_mus/`:
-
-- **[README.md](calculadora_probabilidades_mus/README.md)** - Guía completa del módulo
-- **[FUNDAMENTOS_MATEMATICOS.md](calculadora_probabilidades_mus/FUNDAMENTOS_MATEMATICOS.md)** - Formulación matemática completa
-- **[CHANGELOG_v2.3.md](calculadora_probabilidades_mus/CHANGELOG_v2.3.md)** - Historial de cambios y correcciones
-- **[TABLA_MAESTRA_EV.md](calculadora_probabilidades_mus/TABLA_MAESTRA_EV.md)** - 📊 Ranking completo de manos por EV
-- **[SANITY_CHECK_README.md](calculadora_probabilidades_mus/SANITY_CHECK_README.md)** - Verificación de coherencia
-- **[DESEMPATES_MATEMATICOS.md](calculadora_probabilidades_mus/DESEMPATES_MATEMATICOS.md)** - Implementación de desempates
-
----
-
-## 🔧 Requisitos Técnicos
-
-- **Python**: 3.7 o superior
-- **Dependencias**: 
-  ```bash
-  pip install pandas numpy
-  ```
-
----
-
-## 📈 Precisión Estadística
-
-**Monte Carlo (Estadísticas estáticas):**
-- Iteraciones: 50,000-100,000 por mano
-- Error típico: ±0.15-0.30%
-- Intervalo de confianza: 95%
-
-**Simulación Dinámica:**
-- Iteraciones recomendadas: 50,000
-- Tiempo de ejecución: ~1-2 segundos
-- Error típico: ±0.20-0.40%
-
-**Motor de Decisión:**
-- Calibración de μ: Basada en 700+ manos únicas
-- Umbrales típicos: μ ∈ [2.7, 4.1]
-- Ruido estocástico: σ ∈ [0.3, 0.4]
-
----
-
-## 🤝 Contribuciones
-
-Este proyecto implementa teoría de juegos, inferencia bayesiana y estadística computacional aplicada al Mus. Las contribuciones son bienvenidas, especialmente en:
-
-- Optimización de algoritmos de descarte
-- Mejoras en el modelado bayesiano
-- Estrategias de envite y farol
-- Interfaz gráfica
-
----
-
-## 📝 Licencia
-
-Proyecto educativo y de investigación sobre teoría de juegos aplicada.
-
----
-
-## 🎓 Referencias Matemáticas
-
-- **Teoría de Juegos**: Nash equilibrium, mixed strategies
-- **Estadística Bayesiana**: Prior/posterior probabilities, card removal effect
-- **Simulación Monte Carlo**: Law of large numbers, confidence intervals
-- **Optimización**: Expected Value maximization, dynamic programming
-
----
-
-*Última actualización: 26/02/2026*  
-*Versión: 2.0 (Mejoras Matemáticas Implementadas)*
+**Ver recomendaciones de ejecución:** [GUIA_EJECUCION.md](GUIA_EJECUCION.md)

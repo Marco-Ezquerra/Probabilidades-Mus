@@ -59,22 +59,6 @@ $$
 **Donde:**
 - $P(\text{yo gano})$: Probabilidad precalculada desde dataset Monte Carlo
 
-### EV Soporte (Lineal)
-
-$$
-\text{EV}_{\text{Soporte}}^{\text{Lineal}} = P_{\text{comp}}^{\text{media}} \cdot f_{\text{ajuste}}
-$$
-
-**Donde:**
-- $P_{\text{comp}}^{\text{media}}$: Probabilidad media del compañero (desde dataset)
-- $f_{\text{ajuste}} = 1.0 + 0.3 \cdot (1 - P(\text{yo gano}))$: Factor de ajuste
-  - Si mi mano es mala → compañero más valioso
-
-**Interpretación de $f_{\text{ajuste}}$:**
-- Si $P(\text{yo gano}) = 1.0$ → $f_{\text{ajuste}} = 1.0$ (compañero no añade valor)
-- Si $P(\text{yo gano}) = 0.0$ → $f_{\text{ajuste}} = 1.3$ (compañero muy valioso)
-
----
 
 ## 3. Lances Condicionados (Pares, Juego y Punto)
 
@@ -96,14 +80,9 @@ $$
 - $W$: Valor base de la jugada (puntos garantizados)
   - **Pares**: sin_pares: 0, pares: 1, medias: 2, duples: 3
   - **Juego** (jerarquía: 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33):
-    - 31: 3.000 (mejor juego)
-    - 32: 2.857
-    - 40: 2.714
-    - 37: 2.571
-    - 36: 2.429
-    - 35: 2.286
-    - 34: 2.143
-    - 33: 2.000 (peor juego)
+    - 31: 3.0 (La 31 - mejor juego)
+    - Resto de juegos (32, 40, 37, 36, 35, 34, 33): 2.0
+    - **Nota (v2.4):** Sistema binario simplificado. En el Mus real, la 31 vale 3 puntos base y el resto de juegos valen 2 puntos base uniformemente. Las jerarquías se resuelven por comparación directa en caso de empate.
 - $E_{\text{extra}}$: Ganancia esperada por envites (swing)
   - **Actualmente: 0** (sistema de envites por implementar)
   - Pares: 0
@@ -142,6 +121,12 @@ Mano: [1,1,12,12] (duples sin juego, punto 22)
 - EV_punto: ~2.0 puntos (si ningún rival tiene juego)
 - EV_total: ~6.1 puntos
 ```
+
+**Nota importante sobre EV Soporte Condicionado (ELIMINADO en v2.4):**
+En versiones anteriores se incluía un término de "EV Soporte Condicionado" que modelaba el aporte del compañero en lances de Pares y Juego usando un factor de reducción:
+- `f_red × P(comp_gana) × (W_comp + E_extra)`
+
+Este término fue **eliminado** porque se aplica simétricamente tanto al compañero como a los rivales del equipo contrario, cancelándose mutuamente en el cálculo diferencial. No aporta información útil para la decisión de cortar o dar Mus.
 
 **Descomposición:**
 
