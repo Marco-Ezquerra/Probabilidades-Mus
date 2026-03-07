@@ -4,7 +4,8 @@ Valida casos edge y comportamiento esperado
 """
 
 import sys
-sys.path.insert(0, '/workspaces/Probabilidades-Mus/calculadora_probabilidades_mus')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / 'calculadora_probabilidades_mus'))
 
 from simular_dinamico import simular_con_companero, validar_manos, formatear_resultado_legible
 from calculadoramus import inicializar_baraja

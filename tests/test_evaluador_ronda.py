@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 # Añadir paths
-sys.path.insert(0, str(Path(__file__).parent / "calculadora_probabilidades_mus"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "calculadora_probabilidades_mus"))
 
 from evaluador_ronda import (
     evaluar_grande,

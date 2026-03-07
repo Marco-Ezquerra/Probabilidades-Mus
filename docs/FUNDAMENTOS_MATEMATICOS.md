@@ -1,6 +1,6 @@
 # Fundamentos Matemáticos del Motor de Decisión Mus
 
-> **Versión**: 2.3 (marzo de 2026)  
+> **Versión**: 2.5 (marzo de 2026)  
 > **Enfoque**: Probabilidades condicionadas exactas mediante distribución hipergeométrica  
 > **Fase 1 COMPLETA**: Grande, Chica, Pares, Juego y **Punto**
 
@@ -83,6 +83,7 @@ $$
     - 31: 3.0 (La 31 - mejor juego)
     - Resto de juegos (32, 40, 37, 36, 35, 34, 33): 2.0
     - **Nota (v2.4):** Sistema binario simplificado. En el Mus real, la 31 vale 3 puntos base y el resto de juegos valen 2 puntos base uniformemente. Las jerarquías se resuelven por comparación directa en caso de empate.
+    - **Regla de cálculo (v2.5):** As(1) = **1 punto**, Sota/Caballo/Rey(10/11/12) = **10 puntos**, resto = valor nominal. La comparación entre juegos usa el **rango jeárquico** (31=rango 8, 32=7, 40=6…), no el valor numérico bruto.
 - $E_{\text{extra}}$: Ganancia esperada por envites (swing)
   - **Actualmente: 0** (sistema de envites por implementar)
   - Pares: 0

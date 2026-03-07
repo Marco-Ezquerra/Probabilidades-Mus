@@ -23,6 +23,7 @@ from calculadoramus import (
     comparar_pares,
     comparar_grande_chica,
     calcular_valor_juego,
+    convertir_valor_juego,
     comparar_juego,
     calcular_valor_punto,
     comparar_punto
@@ -161,21 +162,28 @@ def evaluar_juego(manos, posiciones=[1, 2, 3, 4]):
     
     if hay_juego:
         # Juego: buscar el mejor valor ≥ 31
+        # Comparar por rango (convertir_valor_juego) para respetar jerarquía
+        # 31 > 32 > 40 > 37 > 36 > 35 > 34 > 33 (no por valor numérico raw)
         ganador = None
-        mejor_valor = 0
+        mejor_raw = 0
+        mejor_rank = 0
         
         for pos in posiciones:
-            if valores_juego[pos] >= 31:
+            raw = valores_juego[pos]
+            if raw >= 31:
+                rank = convertir_valor_juego(raw)
                 if ganador is None:
                     ganador = pos
-                    mejor_valor = valores_juego[pos]
+                    mejor_raw = raw
+                    mejor_rank = rank
                 else:
-                    resultado = comparar_juego(mejor_valor, valores_juego[pos], es_mano=True)
+                    resultado = comparar_juego(mejor_rank, rank, es_mano=True)
                     if resultado == -1:  # El retador gana
                         ganador = pos
-                        mejor_valor = valores_juego[pos]
+                        mejor_raw = raw
+                        mejor_rank = rank
         
-        return ganador, True, mejor_valor
+        return ganador, True, mejor_raw
     
     else:
         # Punto: buscar el más cercano a 30

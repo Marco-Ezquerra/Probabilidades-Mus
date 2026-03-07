@@ -4,7 +4,8 @@ Evalúa diferentes configuraciones y valida el comportamiento del motor.
 """
 
 import sys
-sys.path.insert(0, '/workspaces/Probabilidades-Mus/calculadora_probabilidades_mus')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / 'calculadora_probabilidades_mus'))
 
 import numpy as np
 import pandas as pd

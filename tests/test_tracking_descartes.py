@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent / "calculadora_probabilidades_mus"))
-sys.path.insert(0, str(Path(__file__).parent / "utils"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "calculadora_probabilidades_mus"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
 
 from generar_politicas_rollout import QTableDescarte, simular_rollout_mascara_rapida, _MASCARAS
 from descarte_heuristico import descarte_heuristico_base
@@ -83,7 +83,7 @@ def test_tracking_descartes():
         print(f"  Máscara {mascara_idx}: reward={reward:+.1f}, descartes={info_descartes}")
     
     # Exportar a CSV temporal
-    csv_test_path = Path("/tmp/test_politicas_descartes.csv")
+    csv_test_path = Path(__file__).parent.parent / "test_politicas_descartes_tmp.csv"
     n_entries = q_table.exportar_csv(csv_test_path)
     
     print(f"\n📝 CSV exportado: {n_entries} entradas guardadas")

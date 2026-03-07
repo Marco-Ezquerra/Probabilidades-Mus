@@ -2,8 +2,8 @@
 
 Sistema completo de análisis probabilístico y toma de decisiones para el juego del **Mus**, implementado con **simulación Monte Carlo**, análisis dinámico condicionado y motor de decisión basado en **Valor Esperado (EV)** con fundamentos matemáticos rigurosos.
 
-> **Versión**: v2.4 (Marzo 2026)  
-> **Estado**: Fase 1 completa ✅ | Fase 2 lista para ejecutar 🚀  
+> **Versión**: v2.5 (Marzo 2026)  
+> **Estado**: Fase 1 completa ✅ | Fase 2 regenerando con reglas corregidas 🔄  
 > **Autor**: Marco Ezquerra  
 > **Lances**: Grande, Chica, Pares, Juego y Punto
 
@@ -259,6 +259,41 @@ Verifica:
 
 ---
 
+## 📈 Novedades v2.5 (Marzo 2026)
+
+### 🐛 Corrección Crítica: Valor del As en Juego
+
+**Bug corregido:** `calcular_valor_juego` contabilizaba el As como **11 puntos** cuando la regla oficial del Mus establece que el As vale **1 punto** en el lance de Juego.
+
+**Impacto:** 110 de 120 manos con ases tenían clasificación de juego incorrecta. Por ejemplo, `[1,1,1,1]` (suma=4) y `[1,1,1,10]` (suma=13) se clasificaban erróneamente como juego.
+
+**Archivo corregido:** `calculadora_probabilidades_mus/calculadoramus.py` — función `calcular_valor_juego`.
+
+```python
+# ANTES (incorrecto)
+def valor_carta_juego(carta):
+    if carta == 1: return 11   # As = 11 ← ERROR
+    if carta >= 10: return 10
+    return carta
+
+# DESPUÉS (correcto)
+def valor_carta_juego(carta):
+    if carta >= 10: return 10  # Sota/Caballo/Rey = 10
+    return carta               # As = 1, resto = valor nominal
+```
+
+### 🐛 Corrección Crítica: Jerarquía de Juego por Rango
+
+**Bug corregido:** `evaluar_juego` comparaba los juegos por su **valor numérico bruto** (40 > 37 > ... > 31) cuando la jerarquía real es **31 > 32 > 40 > 37 > 36 > 35 > 34 > 33** (la 31 gana a todas).
+
+**Impacto:** Cualquier enfrentamiento entre 31 y otro juego (32, 40…) daba ganador incorrecto.
+
+**Archivo corregido:** `calculadora_probabilidades_mus/evaluador_ronda.py` — función `evaluar_juego` ahora usa `convertir_valor_juego` para comparar por rango.
+
+**Consecuencia:** Todos los CSV generados anteriormente (políticas, probabilidades, análisis) han sido regenerados con las reglas correctas.
+
+---
+
 ## 📈 Novedades v2.4 (Marzo 2026)
 
 ### 🎯 Simplificación de Valores Beta
@@ -291,6 +326,7 @@ Verifica:
 
 - **[docs/FUNDAMENTOS_MATEMATICOS.md](docs/FUNDAMENTOS_MATEMATICOS.md)**: Formulación matemática completa del sistema
 - **[docs/README_FASE2.md](docs/README_FASE2.md)**: Guía detallada de la Fase 2 (Q-Learning)
+- **[docs/CHANGELOG_v2.5.md](docs/CHANGELOG_v2.5.md)**: Correcciones críticas v2.5 (as=1, jerarquía juego)
 - **[docs/CHANGELOG_v2.4.md](docs/CHANGELOG_v2.4.md)**: Historial completo de cambios v2.4
 - **[docs/DESEMPATES_MATEMATICOS.md](docs/DESEMPATES_MATEMATICOS.md)**: Explicación de desempates por posición
 - **[docs/TABLA_MAESTRA_EV.md](docs/TABLA_MAESTRA_EV.md)**: Ranking completo de 331 manos por EV
@@ -315,7 +351,7 @@ Verifica:
 
 **Marco Ezquerra**  
 **Repositorio**: [GitHub.com/Marco-Ezquerra/Probabilidades-Mus](https://github.com/Marco-Ezquerra/Probabilidades-Mus)  
-**Versión actual**: v2.4 (Marzo 2026)
+**Versión actual**: v2.5 (Marzo 2026)
 
 ---
 
@@ -345,3 +381,5 @@ python3 generar_politicas_rollout.py
 - Multiprocessing activado (usa todos los cores disponibles)
 
 **Ver recomendaciones de ejecución:** [GUIA_EJECUCION.md](GUIA_EJECUCION.md)
+
+> **Estado actual (v2.5):** La Fase 2 está en ejecución con el código corregido (as=1, jerarquía de juego por rango). Los resultados estarán disponibles en ~12 horas.

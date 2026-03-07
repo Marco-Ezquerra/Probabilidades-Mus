@@ -132,8 +132,15 @@ def comparar_grande_chica(mano1, mano2, es_mano):
 # ============================================================================
 
 def calcular_valor_juego(mano):
-    """Calcula el valor de juego (31-40). Retorna 0 si no hay juego."""
-    valor = sum(min(carta, 10) for carta in mano)
+    """Calcula el valor de juego (31+). Retorna 0 si no hay juego.
+    Regla: As (1) = 1 punto, figuras (10,11,12) = 10 puntos, resto = valor nominal.
+    """
+    def valor_carta_juego(carta):
+        if carta >= 10:   # Sota(10), Caballo(11), Rey(12) valen 10
+            return 10
+        else:             # As(1), 4, 5, 6, 7 valen su valor nominal
+            return carta
+    valor = sum(valor_carta_juego(c) for c in mano)
     return valor if valor >= 31 else 0
 
 

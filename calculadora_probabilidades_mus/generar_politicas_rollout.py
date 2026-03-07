@@ -376,8 +376,14 @@ def generar_politicas_rollout(n_iteraciones=None, modo_8_reyes=True, silent=Fals
     if n_workers > 1:
         if not silent:
             print(f"\nLanzando {n_workers} workers en paralelo...")
-        with multiprocessing.Pool(n_workers) as pool:
-            results = pool.map(_worker_rollout, worker_args)
+        try:
+            ctx = multiprocessing.get_context('spawn')
+            with ctx.Pool(n_workers) as pool:
+                results = pool.map(_worker_rollout, worker_args)
+        except Exception as e:
+            if not silent:
+                print(f"\n⚠️  Multiprocessing falló ({e}), usando modo single-process...")
+            results = [_worker_rollout(args) for args in worker_args]
     else:
         # Single-process fallback
         results = [_worker_rollout(worker_args[0])]
@@ -460,4 +466,5 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

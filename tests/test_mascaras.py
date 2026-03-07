@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Añadir paths
-sys.path.insert(0, str(Path(__file__).parent / "utils"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
 
 from mascaras_descarte import (
     generar_mascaras,
