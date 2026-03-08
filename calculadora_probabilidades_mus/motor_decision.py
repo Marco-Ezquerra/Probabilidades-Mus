@@ -42,7 +42,7 @@ from calculadoramus import (
     convertir_valor_juego,
     calcular_valor_punto
 )
-from params import FACTOR_K_POS, TASA_MUS_OBJETIVO
+from params import FACTOR_K_POS, TASA_MUS_OBJETIVO, EV_CORTE_BONUS
 
 
 # ============================================================================
@@ -699,6 +699,11 @@ def decidir_cortar(mano, estadisticas, mu, k_base=2.0, sigma=0.3, beta=0.7, posi
     # Calcular EV de la mano
     EV_total, desglose = calcular_ev_total(mano, estadisticas, beta, posicion)
     
+    # Bonus por posición: postre (y su pareja) cortando priva a los rivales de
+    # ~2.5 pts de EV en desempates amplificados por apuestas. Proporcional a
+    # (1 − factor_desempate): pos4=2.5, pos2=1.25, pos1=pos3=0.
+    EV_efectivo = EV_total + EV_CORTE_BONUS.get(posicion, 0.0)
+
     # Ajuste de k por posición (position-aware)
     # Posiciones 1 y 3 tienen factor < 1.0 → k menor → más mus
     factor_pos = FACTOR_K_POS.get(posicion, 1.0)
@@ -709,7 +714,7 @@ def decidir_cortar(mano, estadisticas, mu, k_base=2.0, sigma=0.3, beta=0.7, posi
     K = max(K, 0.5)  # Evitar valores negativos o muy pequeños
     
     # Probabilidad de cortar (función sigmoide)
-    exponente = -K * (EV_total - mu)
+    exponente = -K * (EV_efectivo - mu)
     # Limitar exponente para evitar overflow
     exponente = np.clip(exponente, -500, 500)
     P_cortar = 1 / (1 + np.exp(exponente))
@@ -933,8 +938,9 @@ class MotorDecisionMus:
         """
         EV_total, desglose = calcular_ev_total(mano, self.estadisticas, self.params['beta'], posicion)
         
-        # Calcular probabilidad de cortar sin ruido (K fijo)
-        exponente = -self.params['k_base'] * (EV_total - self.mu)
+        # Calcular probabilidad de cortar sin ruido (K fijo), incluyendo bonus posicional
+        EV_efectivo = EV_total + EV_CORTE_BONUS.get(posicion, 0.0)
+        exponente = -self.params['k_base'] * (EV_efectivo - self.mu)
         exponente = np.clip(exponente, -500, 500)
         P_cortar_base = 1 / (1 + np.exp(exponente))
         

@@ -52,6 +52,19 @@ FACTOR_K_POS = {
     4: 1.0    # Postre: normal
 }
 
+# Bonus adicional al EV efectivo antes del sigmoide, por posición.
+# Representa el valor implícito de «quitar mano»: cortar desde postre priva
+# a los rivales de puntos de desempate que, al amplificarse por las apuestas,
+# valen ~2-3 pts reales. El bonus se escala con (1 − factor_desempate) y se
+# calibra para que la tasa de mus del perfil normal siga siendo ~20%.
+# Calibración: sweeping b4 ∈ [0,1.5] con ratio 2:1 → b4=0.30 → tasa=0.2025.
+EV_CORTE_BONUS = {
+    1: 0.0,   # Mano: gana todos los desempates → sin bonus por cortar
+    2: 0.15,  # Interior izda. (equipo Postre): pierde la mitad de desempates
+    3: 0.0,   # Interior dcha. (equipo Mano): sin bonus
+    4: 0.30,  # Postre: pierde todos los desempates → máximo bonus
+}
+
 # ==================== CONFIGURACIÓN DE ITERACIONES ====================
 # FASE 2: Rollout Monte Carlo para generar políticas óptimas de descarte
 
