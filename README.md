@@ -254,6 +254,7 @@ pip install -r requirements.txt
 - [docs/TABLA_MAESTRA_EV.md](docs/TABLA_MAESTRA_EV.md) — Ranking completo de 330 manos por EV
 - [docs/CHANGELOG_v2.5.md](docs/CHANGELOG_v2.5.md) — Historial de cambios
 - [docs/TAREA_PENDIENTE_SESGO_POLITICAS.md](docs/TAREA_PENDIENTE_SESGO_POLITICAS.md) — Sesgo cuantificado en políticas y plan de corrección
+- [docs/README_DECISION_CORTE.md](docs/README_DECISION_CORTE.md) — **Módulo de decisión de corte**: estado actual, limitaciones y hoja de ruta hacia «Mus Avanzado» (calibración con maestros)
 
 ---
 
