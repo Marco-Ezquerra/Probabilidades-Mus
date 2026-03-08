@@ -107,6 +107,7 @@ class EstadisticasEstaticas:
         self.estadisticas_generales = {}
         self.probs_pares = {}  # {mano_tuple: {'prob_menor': X, 'prob_empate': Y}}
         self.probs_juego = {}  # {mano_tuple: {'prob_menor': X, 'prob_empate': Y}}
+        self.probs_punto = {}  # {mano_tuple: {'prob_menor': X, 'prob_empate': Y}} para sin-juego
         self.probs_empate_gc = {}  # {mano_tuple: P(empate exacto grande/chica vs 1 rival)}
         self._cargar()
     
@@ -153,6 +154,7 @@ class EstadisticasEstaticas:
         # Calcular probabilidades exactas de pares y juego
         self._calcular_probabilidades_pares()
         self._calcular_probabilidades_juego()
+        self._calcular_probabilidades_punto()
         # Calcular P(empate exacto) grande/chica para corrección por posición
         self._calcular_probs_empate_gc()
     
@@ -338,6 +340,85 @@ class EstadisticasEstaticas:
         Magnitud típica: 0.002% – 0.4% según la mano.
         """
         return self.probs_empate_gc.get(tuple(sorted(mano)), 0.0)
+
+    def _calcular_probabilidades_punto(self):
+        """Calcula P(rival_punto < yo) y P(rival_punto == yo) para manos sin juego.
+        Solo aplica cuando ningún jugador tiene juego (lance de Punto).
+        La comparación de punto es por valor numérico: mayor suma = mejor punto
+        (todas las manos sin juego tienen suma < 31).
+        """
+        manos_sin_juego = []
+        for mano in self.df['mano_lista']:
+            if calcular_valor_juego(mano) == 0:
+                punto = calcular_valor_punto(mano)
+                manos_sin_juego.append({'mano': tuple(sorted(mano)), 'punto': punto})
+
+        n_total = len(manos_sin_juego)
+        if n_total == 0:
+            return
+
+        for i, mano_i in enumerate(manos_sin_juego):
+            n_menores = 0
+            n_empates = 0
+            for j, mano_j in enumerate(manos_sin_juego):
+                if i == j:
+                    continue
+                if mano_j['punto'] < mano_i['punto']:
+                    n_menores += 1
+                elif mano_j['punto'] == mano_i['punto']:
+                    n_empates += 1
+            prob_menor = n_menores / (n_total - 1) if n_total > 1 else 0.0
+            prob_empate = n_empates / (n_total - 1) if n_total > 1 else 0.0
+            self.probs_punto[mano_i['mano']] = {'prob_menor': prob_menor, 'prob_empate': prob_empate}
+
+    def obtener_prob_punto(self, mano):
+        """Obtiene P(rival_punto < yo) y P(rival_punto == yo) para mano sin juego."""
+        key = tuple(sorted(mano))
+        return self.probs_punto.get(key, {'prob_menor': 0.5, 'prob_empate': 0.0})
+
+    def prob_victoria_pares(self, mano, posicion, P_RL):
+        """P(ganar lance de pares) ajustada por posición.
+
+        Fórmula: (1-P_RL) + P_RL * (prob_menor + prob_empate * factor_des)
+          - (1-P_RL): ningún rival tiene pares → victoria automática.
+          - P_RL: al menos 1 rival tiene pares → compito; la posición
+            decide los empates de valor idéntico.
+        Si no tengo pares → 0.0 (el lance de pares no me beneficia).
+        """
+        tipo_p, _, _ = clasificar_pares(mano)
+        if tipo_p == "sin_pares":
+            return 0.0
+        factor_des = {1: 1.0, 2: 0.5, 3: 0.5, 4: 0.0}.get(posicion, 0.5)
+        key = tuple(sorted(mano))
+        probs = self.probs_pares.get(key, {'prob_menor': 0.5, 'prob_empate': 0.0})
+        p_win_vs_rival = probs['prob_menor'] + probs['prob_empate'] * factor_des
+        return min(1.0, (1 - P_RL) + P_RL * p_win_vs_rival)
+
+    def prob_victoria_juego_punto(self, mano, posicion, P_RL):
+        """P(ganar lance de juego/punto) ajustada por posición.
+
+        Si tengo juego:
+          (1-P_RL) + P_RL * (prob_menor_juego + prob_empate_juego * factor_des)
+          Ej: juego 31 (el mejor) → prob_menor=1, prob_empate>0.
+              Posición 1: win=1.0. Posición 4: win < 1 (pierde empates con otro 31).
+
+        Si no tengo juego (punto):
+          (1-P_RL) * (prob_menor_punto + prob_empate_punto * factor_des)
+          Solo participo si ningún rival tiene juego (1-P_RL).
+        """
+        factor_des = {1: 1.0, 2: 0.5, 3: 0.5, 4: 0.0}.get(posicion, 0.5)
+        key = tuple(sorted(mano))
+        valor_j = calcular_valor_juego(mano)
+        if valor_j > 0:
+            # Tengo juego
+            probs = self.probs_juego.get(key, {'prob_menor': 0.5, 'prob_empate': 0.0})
+            p_win_vs_rival = probs['prob_menor'] + probs['prob_empate'] * factor_des
+            return min(1.0, (1 - P_RL) + P_RL * p_win_vs_rival)
+        else:
+            # No tengo juego: solo gano si ningún rival tiene juego, luego comparo punto
+            probs = self.probs_punto.get(key, {'prob_menor': 0.5, 'prob_empate': 0.0})
+            p_gano_punto = probs['prob_menor'] + probs['prob_empate'] * factor_des
+            return min(1.0, (1 - P_RL) * p_gano_punto)
 
 
 # ============================================================================

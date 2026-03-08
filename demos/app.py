@@ -206,20 +206,24 @@ with tab1:
         _p_emp = _est.obtener_prob_empate_gc(mano)
         _p_grande = max(0.0, float(_row_res['probabilidad_grande']) - 2 * _p_emp * (1 - _fac))
         _p_chica  = max(0.0, float(_row_res['probabilidad_chica'])  - 2 * _p_emp * (1 - _fac))
+        _p_rl_pares = float(_row_res['prob_rival_pares_condicionada'])
+        _p_rl_juego = float(_row_res['prob_rival_juego_condicionada'])
+        _p_pares = _est.prob_victoria_pares(mano, posicion, _p_rl_pares)
+        _p_juego = _est.prob_victoria_juego_punto(mano, posicion, _p_rl_juego)
         pr1, pr2, pr3 = st.columns(3)
         with pr1:
             st.metric("P(Grande)", f"{_p_grande:.1%}")
-            st.metric("P(Pares) ✱", f"{float(_row_res['probabilidad_pares']):.1%}")
+            st.metric("P(Pares)", f"{_p_pares:.1%}" if _p_pares > 0 else "—")
         with pr2:
             st.metric("P(Chica)", f"{_p_chica:.1%}")
-            st.metric("P(Juego) ✱", f"{float(_row_res['probabilidad_juego']):.1%}")
+            st.metric("P(Juego/Punto)", f"{_p_juego:.1%}")
         with pr3:
-            st.metric("P(rival tiene pares)", f"{float(_row_res['prob_rival_pares_condicionada']):.1%}")
-            st.metric("P(rival tiene juego)", f"{float(_row_res['prob_rival_juego_condicionada']):.1%}")
+            st.metric("P(rival tiene pares)", f"{_p_rl_pares:.1%}")
+            st.metric("P(rival tiene juego)", f"{_p_rl_juego:.1%}")
         st.caption(
-            "✱ Pares/Juego: probabilidades condicionales a participar (3M simulaciones). "
-            "Grande/Chica ajustadas por desempate según tu posición. "
-            "El EV de todos los lances aplica el factor de desempate por posición."
+            "Todas las probabilidades ajustadas por posición (desempates: Mano gana, Postre pierde). "
+            "P(Pares) muestra '—' si no tienes pares. "
+            "P(Juego/Punto): si no tienes juego, incluye solo el escenario de punto (ningún rival con juego)."
         )
 
     if st.button("🔮 Analizar mano", type="primary", use_container_width=True):
