@@ -32,7 +32,7 @@ pip install -r requirements.txt
 python3 demos/demo_interactiva.py
 
 # Web App (Streamlit)
-streamlit run demos/app.py
+python -m streamlit run demos/app.py
 ```
 
 ---
@@ -164,7 +164,7 @@ El proyecto incluye una **interfaz web en Streamlit** que permite simular el mot
 
 ```bash
 # Ejecutar localmente
-streamlit run demos/app.py
+python -m streamlit run demos/app.py
 ```
 
 ---
@@ -189,11 +189,10 @@ Probabilidades-Mus/
 ├── 📁 docs/
 │   ├── FUNDAMENTOS_MATEMATICOS.md       # Formulación matemática completa
 │   ├── README_FASE2.md                  # Guía Q-Learning (Fase 2)
-│   ├── TAREA_PENDIENTE_SESGO_POLITICAS.md  # Re-ejecución pendiente (sesgo cuantificado)
+│   ├── README_DECISION_CORTE.md         # Módulo de corte y hoja de ruta Mus Avanzado
 │   ├── CHANGELOG_v2.5.md                # Historial de cambios v2.5
 │   ├── DESEMPATES_MATEMATICOS.md        # Desempates por posición
 │   ├── ESTIMACION_N_MUESTRAL.md         # Cálculo de iteraciones necesarias
-│   ├── SANITY_CHECK_README.md           # Guía de verificación
 │   └── TABLA_MAESTRA_EV.md              # Ranking completo de manos
 │
 ├── 📁 tests/                            # 7 suites de tests (unittest)
@@ -253,7 +252,6 @@ pip install -r requirements.txt
 - [docs/DESEMPATES_MATEMATICOS.md](docs/DESEMPATES_MATEMATICOS.md) — Desempates exactos por posición
 - [docs/TABLA_MAESTRA_EV.md](docs/TABLA_MAESTRA_EV.md) — Ranking completo de 330 manos por EV
 - [docs/CHANGELOG_v2.5.md](docs/CHANGELOG_v2.5.md) — Historial de cambios
-- [docs/TAREA_PENDIENTE_SESGO_POLITICAS.md](docs/TAREA_PENDIENTE_SESGO_POLITICAS.md) — Sesgo cuantificado en políticas y plan de corrección
 - [docs/README_DECISION_CORTE.md](docs/README_DECISION_CORTE.md) — **Módulo de decisión de corte**: estado actual, limitaciones y hoja de ruta hacia «Mus Avanzado» (calibración con maestros)
 
 ---

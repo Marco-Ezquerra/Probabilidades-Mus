@@ -3,7 +3,7 @@ Mus IA — Web App (Streamlit)
 Interfaz para el motor de decisión probabilístico del Mus (baraja 8 reyes).
 
 Uso:
-    streamlit run demos/app.py
+    python -m streamlit run demos/app.py
 """
 
 import sys
@@ -294,8 +294,9 @@ with tab2:
     df_seg = _load_segundas()
     if df_seg is None:
         st.warning(
-            "⏳ Las probabilidades a segundas aún no están disponibles.  \n"
-            "La simulación está en curso (puede tardar ~1h con 4 workers).  \n"
+            "⏳ Las probabilidades a segundas no están disponibles todavía.  \n"
+            "Para generarlas, ejecuta `python calculadora_probabilidades_mus/probabilidades_segundas.py`  \n"
+            "(~84.480 tareas, 4 workers, puede tardar varias horas).  \n"
             "Cuando termine, reinicia la app para cargar los datos."
         )
     else:
