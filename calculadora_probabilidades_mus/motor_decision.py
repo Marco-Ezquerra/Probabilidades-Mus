@@ -241,18 +241,21 @@ class EstadisticasEstaticas:
         
         # Para cada mano, calcular probabilidades exactas
         for i, mano_i in enumerate(manos_con_juego):
-            # Contar cuántas manos son estrictamente peores (valor juego mayor es peor, 31 es mejor)
+            # Contar cuántas manos son estrictamente peores usando rangos jerárquicos
+            # Jerarquía: 31>32>40>37>36>35>34>33 → rank: 31=8, 32=7, 40=6, ..., 33=1
+            # Mayor rango = mejor juego. mano_j peor que mano_i ↔ rank(j) < rank(i)
             n_menores = 0
             n_empates = 0
+            rank_i = convertir_valor_juego(mano_i['valor_juego'])
             
             for j, mano_j in enumerate(manos_con_juego):
                 if i == j:
                     continue
                 
-                # En juego: menor valor = mejor mano
-                if mano_j['valor_juego'] > mano_i['valor_juego']:
+                rank_j = convertir_valor_juego(mano_j['valor_juego'])
+                if rank_j < rank_i:
                     n_menores += 1
-                elif mano_j['valor_juego'] == mano_i['valor_juego']:
+                elif rank_j == rank_i:
                     n_empates += 1
             
             # Probabilidades exactas
