@@ -36,3 +36,6 @@ tmp/
 
 # Keep estructura pero ignorar tests temporales
 test_temp_*.py
+
+probabilidades_segundas_log.txt
+probabilidades_segundas_err.txt

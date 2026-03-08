@@ -41,14 +41,24 @@ from params import obtener_equipo, MODO_8_REYES
 # ==============================================================================
 # CONFIGURACIÓN
 # ==============================================================================
-N_SIMS_PER_CONFIG = 3000   # Simulaciones por (mano, n2, n3, n4)
-FOCAL_POSICION = 1          # Posición focal (1=mano, la más estratégicamente relevante)
+N_SIMS_PER_CONFIG = 3000   # Simulaciones por (mano, posicion, n_comp, n_rival1, n_rival2)
 ARCHIVO_SALIDA = Path(__file__).parent / "probabilidades_segundas.csv"
 ARCHIVO_RESUMEN = Path(__file__).parent / "resumen_segundas.csv"
-EQUIPO_FOCAL = obtener_equipo(FOCAL_POSICION)  # "A"
 
-# Posiciones de los otros jugadores (en orden)
-OTRAS_POSICIONES = [p for p in [1, 2, 3, 4] if p != FOCAL_POSICION]  # [2, 3, 4]
+# Equipos: A=(1,3), B=(2,4)
+# Para cada posición focal, calcula quién es compañero y quiénes son rivales
+# La clave de esta tabla es: {focal_pos: (partner_pos, [rival1_pos, rival2_pos])}
+_EQUIPO_MAP = {
+    1: (3, [2, 4]),
+    2: (4, [1, 3]),
+    3: (1, [2, 4]),
+    4: (2, [1, 3]),
+}
+
+def _otras_ordenadas(focal_pos):
+    """Devuelve (partner, rival1, rival2) en orden global de pos ascendente."""
+    partner, rivales = _EQUIPO_MAP[focal_pos]
+    return partner, rivales[0], rivales[1]
 
 
 # ==============================================================================
@@ -124,19 +134,38 @@ def simular_manos_rivales(remaining_36, n_kept_otros):
 
 def simular_config(args):
     """
-    Worker: simula N_SIMS para una (mano_focal, n2, n3, n4).
+    Worker: simula N_SIMS para una (mano_focal, focal_pos, n_comp, n_rival1, n_rival2).
 
-    Returns dict con win counts y n_sims.
+    Parámetros de args:
+        mano_focal   : tuple con 4 cartas del jugador focal
+        focal_pos    : posición del jugador focal (1-4)
+        n_kept_comp  : cartas guardadas por el compañero
+        n_kept_rival1: cartas guardadas por el rival 1
+        n_kept_rival2: cartas guardadas por el rival 2
+        baraja_full  : lista completa de 40 cartas
+        n_sims       : número de simulaciones
+
+    Returns dict con probabilidades estimadas.
     """
-    mano_focal, n_kept_j2, n_kept_j3, n_kept_j4, baraja_full, n_sims, focal_pos = args
+    mano_focal, focal_pos, n_kept_comp, n_kept_rival1, n_kept_rival2, baraja_full, n_sims = args
+
+    # Determinar otras posiciones en orden global ascendente
+    partner_pos, rival1_pos, rival2_pos = _otras_ordenadas(focal_pos)
+    # Mapear cuántas guardan según su posición global
+    n_kept_other = {}  # {pos_global: n_kept}
+    n_kept_other[partner_pos] = n_kept_comp
+    n_kept_other[rival1_pos]  = n_kept_rival1
+    n_kept_other[rival2_pos]  = n_kept_rival2
+
+    # Orden esperado por simular_manos_rivales: otras posiciones en orden global
+    otras_pos = sorted(n_kept_other.keys())
+    n_kept_otros = [n_kept_other[p] for p in otras_pos]
 
     # Construir deck sin las cartas de la mano focal
     remaining = list(baraja_full)
     for card in mano_focal:
         remaining.remove(card)
 
-    n_kept_otros = [n_kept_j2, n_kept_j3, n_kept_j4]
-    otras_pos = [p for p in [1, 2, 3, 4] if p != focal_pos]
     equipo_focal = obtener_equipo(focal_pos)
 
     win_grande = 0
@@ -172,9 +201,10 @@ def simular_config(args):
 
     return {
         'mano': list(mano_focal),
-        'n_kept_j2': n_kept_j2,
-        'n_kept_j3': n_kept_j3,
-        'n_kept_j4': n_kept_j4,
+        'posicion_focal': focal_pos,
+        'n_kept_comp': n_kept_comp,
+        'n_kept_rival1': n_kept_rival1,
+        'n_kept_rival2': n_kept_rival2,
         'prob_grande': win_grande / n_sims,
         'prob_chica': win_chica / n_sims,
         'prob_pares': win_pares / n_sims,
@@ -191,32 +221,36 @@ def main():
     print("=" * 70)
     print("PROBABILIDADES A SEGUNDAS - CONDICIONADO A CARTAS GUARDADAS")
     print("=" * 70)
-    print(f"Posicion focal  : J{FOCAL_POSICION} (Equipo {EQUIPO_FOCAL})")
-    print(f"Otras posiciones: J{OTRAS_POSICIONES[0]}, J{OTRAS_POSICIONES[1]}, J{OTRAS_POSICIONES[2]}")
-    print(f"Sims por config : {N_SIMS_PER_CONFIG:,}")
+    print(f"Posiciones : 1, 2, 3, 4 (todas)")
+    print(f"Configs/pos: 64  (comp x rival1 x rival2 ∈ {{1,2,3,4}}^3)")
+    print(f"Sims/config: {N_SIMS_PER_CONFIG:,}")
 
     # Cargar manos únicas
     manos = cargar_manos_unicas()
-    print(f"Manos unicas    : {len(manos)}")
+    print(f"Manos unicas: {len(manos)}")
 
     # Baraja base
     baraja_full = inicializar_baraja(MODO_8_REYES)
 
-    # Generar todas las combinaciones (n2, n3, n4) ∈ {1,2,3,4}^3
-    configs = list(product([1, 2, 3, 4], repeat=3))
-    n_total = len(manos) * len(configs)
-    print(f"Configs (n2,n3,n4): {len(configs)}  |  Total tasks: {n_total:,}")
+    # Configs (n_comp, n_rival1, n_rival2) ∈ {1,2,3,4}^3
+    configs = list(product([1, 2, 3, 4], repeat=3))  # 64 configs
+    n_total = len(manos) * len(configs) * 4           # 4 posiciones
+    print(f"Total tareas: {n_total:,}")
     print()
 
-    # Construir lista de argumentos para workers
+    # Construir argumentos: (mano, focal_pos, n_comp, n_rival1, n_rival2, baraja, n_sims)
     worker_args = []
-    for mano in manos:
-        for n2, n3, n4 in configs:
-            worker_args.append((mano, n2, n3, n4, baraja_full, N_SIMS_PER_CONFIG, FOCAL_POSICION))
+    for focal_pos in [1, 2, 3, 4]:
+        for mano in manos:
+            for n_comp, n_r1, n_r2 in configs:
+                worker_args.append((
+                    mano, focal_pos, n_comp, n_r1, n_r2,
+                    baraja_full, N_SIMS_PER_CONFIG
+                ))
 
-    # Lanzar pool
+    # Lanzar pool multiproceso
     n_workers = min(multiprocessing.cpu_count(), 4)
-    print(f"Lanzando {n_workers} workers en paralelo ({n_total:,} tareas)...")
+    print(f"Lanzando {n_workers} workers en paralelo ({len(worker_args):,} tareas)...")
 
     try:
         ctx = multiprocessing.get_context('spawn')
@@ -229,15 +263,19 @@ def main():
     # Construir DataFrame
     df = pd.DataFrame(results)
     df['mano'] = df['mano'].apply(str)
-    df = df.sort_values(['n_kept_j2', 'n_kept_j3', 'n_kept_j4', 'mano']).reset_index(drop=True)
+    df = df.sort_values(
+        ['posicion_focal', 'n_kept_comp', 'n_kept_rival1', 'n_kept_rival2', 'mano']
+    ).reset_index(drop=True)
 
     # Guardar tabla completa
     df.to_csv(ARCHIVO_SALIDA, index=False)
     print(f"\nTabla completa guardada: {ARCHIVO_SALIDA}")
     print(f"  Filas: {len(df):,}  |  Columnas: {list(df.columns)}")
 
-    # ── Tabla resumen por config ──────────────────────────────────────────────
-    resumen = df.groupby(['n_kept_j2', 'n_kept_j3', 'n_kept_j4']).agg(
+    # ── Tabla resumen por posicion + config ──────────────────────────────────
+    resumen = df.groupby(
+        ['posicion_focal', 'n_kept_comp', 'n_kept_rival1', 'n_kept_rival2']
+    ).agg(
         prob_grande=('prob_grande', 'mean'),
         prob_chica=('prob_chica', 'mean'),
         prob_pares=('prob_pares', 'mean'),
@@ -245,43 +283,31 @@ def main():
         n_manos=('mano', 'count')
     ).reset_index()
     resumen.to_csv(ARCHIVO_RESUMEN, index=False)
-    print(f"Resumen guardado:       {ARCHIVO_RESUMEN}")
+    print(f"Resumen guardado: {ARCHIVO_RESUMEN}")
+    print(f"  Filas resumen: {len(resumen):,}  (4 posiciones × 64 configs)")
 
-    # ── Estadísticas clave ────────────────────────────────────────────────────
+    # ── Estadísticas rápidas ──────────────────────────────────────────────────
     print()
     print("=" * 70)
-    print("RESUMEN: P(VICTORIA) SEGUN CARTAS GUARDADAS POR RIVALES")
-    print(f"(Promediado sobre {len(manos)} manos — Posicion focal: J{FOCAL_POSICION})")
+    print("RESUMEN: P(VICTORIA) SEGÚN CARTAS GUARDADAS (promedio sobre manos)")
     print("=" * 70)
 
-    # Mostrar tabla resumen agrupando por rivales (n2+n4) y compañero (n3)
-    # Rivales son J2 y J4 para el equipo A
-    print()
-    print("Efecto de cuantas cartas guardan los RIVALES (J2+J4) en promedio:")
-    df['n_kept_rivales'] = df.apply(
-        lambda r: r['n_kept_j2'] + r['n_kept_j4'], axis=1)
-    rival_group = df.groupby('n_kept_rivales')[
-        ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
-    ].mean()
-    print(rival_group.round(4).to_string())
-
-    print()
-    print("Efecto de cuantas cartas guarda el COMPANERO (J3):")
-    comp_group = df.groupby('n_kept_j3')[
-        ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
-    ].mean()
-    print(comp_group.round(4).to_string())
-
-    print()
-    print("Tabla completa (64 configs):")
-    print(resumen[['n_kept_j2', 'n_kept_j3', 'n_kept_j4',
-                   'prob_grande', 'prob_chica', 'prob_pares', 'prob_juego'
-                   ]].round(4).to_string(index=False))
+    for pos in [1, 2, 3, 4]:
+        sub = df[df['posicion_focal'] == pos]
+        print(f"\n--- Posición {pos} ---")
+        rival_g = sub.groupby(['n_kept_rival1', 'n_kept_rival2'])[
+            ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
+        ].mean().round(3)
+        comp_g = sub.groupby('n_kept_comp')[
+            ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
+        ].mean().round(3)
+        print(" Efecto compañero (por n_kept_comp):")
+        print(comp_g.to_string())
 
     print()
     print("Archivos generados:")
-    print(f"  {ARCHIVO_SALIDA.name}  ({len(df):,} filas — por mano y config)")
-    print(f"  {ARCHIVO_RESUMEN.name}  (64 filas — config agregada)")
+    print(f"  {ARCHIVO_SALIDA.name}  ({len(df):,} filas)")
+    print(f"  {ARCHIVO_RESUMEN.name}  ({len(resumen):,} filas)")
 
 
 if __name__ == "__main__":
