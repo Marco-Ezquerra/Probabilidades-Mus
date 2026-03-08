@@ -1,0 +1,13 @@
+================================================================================
+SANITY CHECK - VERIFICACIÓN DE CORDURA DEL MODELO EV
+================================================================================
+
+Modo: 8reyes
+Perfil: normal
+Fecha: 26 febrero 2026
+Total manos únicas: 330
+
+RESULTADOS DE VERIFICACIONES:
+--------------------------------------------------------------------------------
+
+1. Posición 1 siempre mayor o igual:
