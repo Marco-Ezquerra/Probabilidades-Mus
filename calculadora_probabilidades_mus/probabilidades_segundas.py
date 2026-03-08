@@ -222,7 +222,7 @@ def main():
     print("PROBABILIDADES A SEGUNDAS - CONDICIONADO A CARTAS GUARDADAS")
     print("=" * 70)
     print(f"Posiciones : 1, 2, 3, 4 (todas)")
-    print(f"Configs/pos: 64  (comp x rival1 x rival2 ∈ {{1,2,3,4}}^3)")
+    print(f"Configs/pos: 64  (comp x rival1 x rival2 in {{1,2,3,4}}^3)")
     print(f"Sims/config: {N_SIMS_PER_CONFIG:,}")
 
     # Cargar manos únicas
@@ -284,7 +284,7 @@ def main():
     ).reset_index()
     resumen.to_csv(ARCHIVO_RESUMEN, index=False)
     print(f"Resumen guardado: {ARCHIVO_RESUMEN}")
-    print(f"  Filas resumen: {len(resumen):,}  (4 posiciones × 64 configs)")
+    print(f"  Filas resumen: {len(resumen):,}  (4 posiciones x 64 configs)")
 
     # ── Estadísticas rápidas ──────────────────────────────────────────────────
     print()
