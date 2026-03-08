@@ -81,12 +81,14 @@ E_EXTRA_JUEGO = 0.0
 E_EXTRA_PUNTO = 0.0
 
 # Perfiles predefinidos
-# k_base y percentil_mu ajustados para lograr ~20% de tasa de mus
-# con FACTOR_K_POS position-aware.
+# k_base y percentil_mu calibrados empíricamente:
+#   normal  pct=77  k_base=1.2  -> P_cortar~0.33  tasa_mus~0.20
+#   conservador pct=84 k_base=1.4 -> P_cortar~0.26  tasa_mus~0.30
+#   agresivo    pct=60 k_base=1.0 -> P_cortar~0.49  tasa_mus~0.07
 PERFILES = {
-    'conservador': {'beta': 0.65, 'k_base': 1.2, 'sigma': 0.3, 'percentil_mu': 80},
-    'normal': {'beta': 0.75, 'k_base': 1.0, 'sigma': 0.4, 'percentil_mu': 74},
-    'agresivo': {'beta': 0.85, 'k_base': 0.8, 'sigma': 0.5, 'percentil_mu': 65}
+    'conservador': {'beta': 0.65, 'k_base': 1.4, 'sigma': 0.3,  'percentil_mu': 84},
+    'normal':      {'beta': 0.75, 'k_base': 1.2, 'sigma': 0.35, 'percentil_mu': 77},
+    'agresivo':    {'beta': 0.85, 'k_base': 1.0, 'sigma': 0.4,  'percentil_mu': 60},
 }
 
 

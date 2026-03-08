@@ -29,9 +29,9 @@ PERFILES = ["conservador", "normal", "agresivo"]
 PERFILES_LABELS = {"conservador": "🛡️ Conservador", "normal": "⚖️ Normal", "agresivo": "⚔️ Agresivo"}
 
 DESCR_PERFILES = {
-    "conservador": "Corta solo con EVs claramente superiores a la media. Reduce el riesgo de exponer manos débiles.",
-    "normal":      "Perfil de referencia. Equilibrio entre agresividad y fiabilidad. Umbral p74.",
-    "agresivo":    "Mayor tolerancia al riesgo. Corta con EVs por debajo de la media del campo. Umbral p65.",
+    "conservador": "Corta solo con manos de EV claramente superior. Umbral p84 — tasa de mus ~30% (da mus con frecuencia).",
+    "normal":      "Perfil de referencia calibrado para una tasa de mus del 20%. Umbral p77 — P(Cortar) ≈ 33%.",
+    "agresivo":    "Corta la mayoría de las manos (no quiere nuevas cartas). Umbral p60 — tasa de mus ~7%.",
 }
 
 # Mapa de equipos: A=(1,3), B=(2,4)
@@ -55,6 +55,14 @@ def _load_politicas():
 @st.cache_data(show_spinner=False)
 def _load_sanity():
     csv_path = _ROOT / "calculadora_probabilidades_mus" / "sanity_check_ev_8reyes.csv"
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def _load_resultados():
+    csv_path = _ROOT / "calculadora_probabilidades_mus" / "resultados_8reyes.csv"
     if csv_path.exists():
         return pd.read_csv(csv_path)
     return None
@@ -106,6 +114,16 @@ def _buscar_segundas(df_seg, mano: list, posicion: int,
         (df_seg["n_kept_rival2"] == n_rival2)
     )
     hits = df_seg[mask]
+    return hits.iloc[0] if not hits.empty else None
+
+
+def _buscar_prob_lance(df_res, mano: list):
+    """Devuelve la fila de resultados_8reyes para una mano dada, o None."""
+    if df_res is None:
+        return None
+    mano_str = _mano_key(mano)
+    mask = df_res["mano"].apply(lambda x: _mano_key(eval(str(x)))) == mano_str
+    hits = df_res[mask]
     return hits.iloc[0] if not hits.empty else None
 
 
@@ -168,6 +186,22 @@ with tab1:
 
     mano = [c1, c2, c3, c4]
     st.write(f"**Mano:** {' · '.join(NOMBRES_CARTA[c] for c in mano)}")
+
+    # ── Probabilidades de victoria por lance (siempre visibles) ──────────
+    _row_res = _buscar_prob_lance(_load_resultados(), mano)
+    if _row_res is not None:
+        st.markdown("##### 📈 Probabilidades de victoria por lance")
+        pr1, pr2, pr3 = st.columns(3)
+        with pr1:
+            st.metric("P(Grande)", f"{float(_row_res['probabilidad_grande']):.1%}")
+            st.metric("P(Pares) ✱", f"{float(_row_res['probabilidad_pares']):.1%}")
+        with pr2:
+            st.metric("P(Chica)", f"{float(_row_res['probabilidad_chica']):.1%}")
+            st.metric("P(Juego) ✱", f"{float(_row_res['probabilidad_juego']):.1%}")
+        with pr3:
+            st.metric("P(rival tiene pares)", f"{float(_row_res['prob_rival_pares_condicionada']):.1%}")
+            st.metric("P(rival tiene juego)", f"{float(_row_res['prob_rival_juego_condicionada']):.1%}")
+        st.caption("✱ Probabilidades condicionales a participar en el lance. Calculadas sobre 3M distribuciones (baraja 8 reyes).")
 
     if st.button("🔮 Analizar mano", type="primary", use_container_width=True):
         motor = _load_motor(perfil)
@@ -364,59 +398,59 @@ with tab2:
                 (df_seg["posicion_focal"] == posicion)
             ][["n_kept_comp", "n_kept_rival1", "n_kept_rival2",
                "prob_grande", "prob_chica", "prob_pares", "prob_juego"]].copy()
-
             if df_mano_pos.empty:
-                st.info("No hay datos todavía para esta mano.")
+                st.info("No hay datos para esta mano y posición.")
             else:
-                df_mano_pos = df_mano_pos.sort_values(
-                    ["n_kept_comp", "n_kept_rival1", "n_kept_rival2"]
-                ).reset_index(drop=True)
-                st.dataframe(
-                    df_mano_pos.style.format({
-                        "prob_grande": "{:.3f}", "prob_chica": "{:.3f}",
-                        "prob_pares":  "{:.3f}", "prob_juego": "{:.3f}"
-                    }),
-                    use_container_width=True
-                )
+                df_mano_pos = df_mano_pos.sort_values(["n_kept_rival1", "n_kept_rival2"])
+                st.dataframe(df_mano_pos.reset_index(drop=True), use_container_width=True)
 
 
 # ══════════════════════════════════════
-#  TAB 3 — RANKING EV
+#  TAB 3 — RANKING DE MANOS
 # ══════════════════════════════════════
 with tab3:
-    st.subheader("🏆 Ranking de Manos — Valor Esperado")
-
-    df_ev_ranking = _load_sanity()
-    if df_ev_ranking is not None:
-        col_pos = None
-        for c in df_ev_ranking.columns:
-            if str(posicion) in c and "ev" in c.lower():
-                col_pos = c
-                break
-        if col_pos is None:
-            ev_cols = [c for c in df_ev_ranking.columns if "ev" in c.lower()]
-            col_pos = ev_cols[0] if ev_cols else df_ev_ranking.columns[-1]
-
-        col_mano = df_ev_ranking.columns[0]
-        lbl = f"EV (pos. {posicion})"
-        df_show = df_ev_ranking[[col_mano, col_pos]].rename(
-            columns={col_mano: "Mano", col_pos: lbl}
-        )
-        df_show = df_show.sort_values(lbl, ascending=False).reset_index(drop=True)
-        df_show.index += 1
-
-        col_top, col_bot = st.columns(2)
-        with col_top:
-            st.markdown("**🏅 Top 10**")
-            st.dataframe(df_show.head(10), use_container_width=True)
-        with col_bot:
-            st.markdown("**⚠️ Bottom 10**")
-            st.dataframe(df_show.tail(10).iloc[::-1], use_container_width=True)
-
-        with st.expander("Ver las 330 manos completas"):
-            st.dataframe(df_show, use_container_width=True)
+    st.subheader("📊 Ranking de Manos por Probabilidades de Victoria")
+    df_res3 = _load_resultados()
+    if df_res3 is None:
+        st.warning("No se encontró `resultados_8reyes.csv`. Ejecuta el simulador primero.")
     else:
-        st.info("Ejecuta `sanity_check_ev.py` para generar el ranking precomputado.")
+        col_sort, col_n = st.columns([3, 1])
+        with col_sort:
+            sort_by = st.selectbox(
+                "Ordenar por",
+                ["probabilidad_grande", "probabilidad_chica", "probabilidad_pares", "probabilidad_juego"],
+                format_func=lambda x: {
+                    "probabilidad_grande": "P(Grande)",
+                    "probabilidad_chica":  "P(Chica)",
+                    "probabilidad_pares":  "P(Pares) — condicional",
+                    "probabilidad_juego":  "P(Juego) — condicional",
+                }[x],
+            )
+        with col_n:
+            n_top = st.number_input("Top N", min_value=10, max_value=330, value=50, step=10)
+
+        df_rank = df_res3.sort_values(sort_by, ascending=False).head(int(n_top)).copy()
+        df_rank["mano"] = df_rank["mano"].apply(
+            lambda x: " · ".join(NOMBRES_CARTA.get(c, str(c)) for c in sorted(eval(str(x))))
+        )
+        df_rank = df_rank.rename(columns={
+            "probabilidad_grande":           "P(Grande)",
+            "probabilidad_chica":            "P(Chica)",
+            "probabilidad_pares":            "P(Pares)*",
+            "probabilidad_juego":            "P(Juego)*",
+            "prob_rival_pares_condicionada": "P(rival↗Pares)",
+            "prob_rival_juego_condicionada": "P(rival↗Juego)",
+        })
+        for col in ["P(Grande)", "P(Chica)", "P(Pares)*", "P(Juego)*",
+                    "P(rival↗Pares)", "P(rival↗Juego)"]:
+            if col in df_rank.columns:
+                df_rank[col] = df_rank[col].map("{:.1%}".format)
+
+        st.dataframe(df_rank.reset_index(drop=True), use_container_width=True)
+        st.caption(
+            "\\* P(Pares) y P(Juego) son probabilidades condicionales a participar en ese lance.  \n"
+            "Calculadas con 3 millones de distribuciones aleatorias sobre baraja 8 reyes."
+        )
 
 
 # ── Footer ───────────────────────────────────────────────
