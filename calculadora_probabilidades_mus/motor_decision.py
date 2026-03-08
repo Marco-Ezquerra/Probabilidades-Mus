@@ -107,6 +107,7 @@ class EstadisticasEstaticas:
         self.estadisticas_generales = {}
         self.probs_pares = {}  # {mano_tuple: {'prob_menor': X, 'prob_empate': Y}}
         self.probs_juego = {}  # {mano_tuple: {'prob_menor': X, 'prob_empate': Y}}
+        self.probs_empate_gc = {}  # {mano_tuple: P(empate exacto grande/chica vs 1 rival)}
         self._cargar()
     
     def _cargar(self):
@@ -152,6 +153,8 @@ class EstadisticasEstaticas:
         # Calcular probabilidades exactas de pares y juego
         self._calcular_probabilidades_pares()
         self._calcular_probabilidades_juego()
+        # Calcular P(empate exacto) grande/chica para corrección por posición
+        self._calcular_probs_empate_gc()
     
     def _calcular_prob_tener_pares(self):
         """Calcula la probabilidad general de que una mano tenga pares."""
@@ -300,6 +303,41 @@ class EstadisticasEstaticas:
         """Obtiene las probabilidades exactas de una mano en juego."""
         key = tuple(sorted(mano))
         return self.probs_juego.get(key, {'prob_menor': 0.5, 'prob_empate': 0.0})
+
+    def _calcular_probs_empate_gc(self):
+        """
+        Calcula P(empate exacto en grande/chica) para cada mano.
+        Un empate ocurre cuando un rival tiene exactamente el mismo multiset de
+        cartas (la condición es idéntica en grande y chica). Las probabilidades
+        del CSV se simularon con es_mano=True (pos. 1 gana todos los empates);
+        este valor permite corregirlas para cualquier posición.
+        """
+        from math import comb
+        from collections import Counter
+        baraja = inicializar_baraja(self.modo_8_reyes)
+        n_restantes = len(baraja) - 4  # 36 cartas tras retirar la mano focal
+        for _, row in self.df.iterrows():
+            mano = tuple(row['mano_lista'])
+            remaining = list(baraja)
+            for c in mano:
+                remaining.remove(c)
+            rem_count = Counter(remaining)
+            need_count = Counter(mano)
+            ways = 1
+            for val, need_n in need_count.items():
+                available = rem_count.get(val, 0)
+                if available < need_n:
+                    ways = 0
+                    break
+                ways *= comb(available, need_n)
+            self.probs_empate_gc[mano] = ways / comb(n_restantes, 4)
+
+    def obtener_prob_empate_gc(self, mano):
+        """
+        P(un rival aleatorio empata exacto en grande/chica con esta mano).
+        Magnitud típica: 0.002% – 0.4% según la mano.
+        """
+        return self.probs_empate_gc.get(tuple(sorted(mano)), 0.0)
 
 
 # ============================================================================
@@ -511,14 +549,24 @@ def calcular_ev_total(mano, estadisticas, beta=0.7, posicion=1):
     # Analizar características de la mano
     analisis = analizar_mano(mano)
     
-    # --- GRANDE (Lineal) ---
-    EV_propio_G = calcular_ev_propio_lineal(prob_mano['prob_grande'])
-    EV_soporte_G = calcular_ev_soporte_lineal(mano, prob_mano['prob_grande'], estadisticas, 'grande')
+    # Corrección por posición en grande/chica: las probabilidades del CSV fueron
+    # simuladas con es_mano=True (pos. 1 gana todos los empates exactos). Para
+    # otras posiciones se descuenta la fracción de empates que se perderían.
+    # Fórmula: prob_adj = prob_stored − 2·P(empate)·(1 − factor_desempate)
+    # Para pos. 1 factor=1.0 → corrección=0 (sin cambio). Magnitud: < 0.8%.
+    _factor_des_gc = {1: 1.0, 2: 0.5, 3: 0.5, 4: 0.0}.get(posicion, 0.5)
+    _p_empate_gc = estadisticas.obtener_prob_empate_gc(mano)
+
+    # --- GRANDE (Lineal, desempate ajustado por posición) ---
+    _prob_grande_adj = max(0.0, prob_mano['prob_grande'] - 2 * _p_empate_gc * (1 - _factor_des_gc))
+    EV_propio_G = calcular_ev_propio_lineal(_prob_grande_adj)
+    EV_soporte_G = calcular_ev_soporte_lineal(mano, _prob_grande_adj, estadisticas, 'grande')
     EV_decision_G = EV_propio_G + (beta * EV_soporte_G)
-    
-    # --- CHICA (Lineal) ---
-    EV_propio_C = calcular_ev_propio_lineal(prob_mano['prob_chica'])
-    EV_soporte_C = calcular_ev_soporte_lineal(mano, prob_mano['prob_chica'], estadisticas, 'chica')
+
+    # --- CHICA (Lineal, mismo ajuste de desempate) ---
+    _prob_chica_adj = max(0.0, prob_mano['prob_chica'] - 2 * _p_empate_gc * (1 - _factor_des_gc))
+    EV_propio_C = calcular_ev_propio_lineal(_prob_chica_adj)
+    EV_soporte_C = calcular_ev_soporte_lineal(mano, _prob_chica_adj, estadisticas, 'chica')
     EV_decision_C = EV_propio_C + (beta * EV_soporte_C)
     
     # --- PARES (Condicionado) ---

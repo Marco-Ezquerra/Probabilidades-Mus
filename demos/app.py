@@ -78,6 +78,13 @@ def _load_segundas():
     return None
 
 
+@st.cache_resource(show_spinner=False)
+def _load_estadisticas():
+    """Carga EstadisticasEstaticas (incluye P(empate GC) para ajuste por posición)."""
+    from motor_decision import EstadisticasEstaticas
+    return EstadisticasEstaticas(modo_8_reyes=True)
+
+
 # ─────────────────────── Helpers ──────────────────────────
 def _mano_key(mano: list) -> str:
     return str(sorted(mano))
@@ -191,17 +198,29 @@ with tab1:
     _row_res = _buscar_prob_lance(_load_resultados(), mano)
     if _row_res is not None:
         st.markdown("##### 📈 Probabilidades de victoria por lance")
+        # Grande y Chica: ajustar por posición (las probabilidades del CSV asumen
+        # pos. 1 ganando todos los empates; correción analítica ≤ 0.8% en baraja 8R).
+        _FACTOR_DES = {1: 1.0, 2: 0.5, 3: 0.5, 4: 0.0}
+        _fac = _FACTOR_DES[posicion]
+        _est = _load_estadisticas()
+        _p_emp = _est.obtener_prob_empate_gc(mano)
+        _p_grande = max(0.0, float(_row_res['probabilidad_grande']) - 2 * _p_emp * (1 - _fac))
+        _p_chica  = max(0.0, float(_row_res['probabilidad_chica'])  - 2 * _p_emp * (1 - _fac))
         pr1, pr2, pr3 = st.columns(3)
         with pr1:
-            st.metric("P(Grande)", f"{float(_row_res['probabilidad_grande']):.1%}")
+            st.metric("P(Grande)", f"{_p_grande:.1%}")
             st.metric("P(Pares) ✱", f"{float(_row_res['probabilidad_pares']):.1%}")
         with pr2:
-            st.metric("P(Chica)", f"{float(_row_res['probabilidad_chica']):.1%}")
+            st.metric("P(Chica)", f"{_p_chica:.1%}")
             st.metric("P(Juego) ✱", f"{float(_row_res['probabilidad_juego']):.1%}")
         with pr3:
             st.metric("P(rival tiene pares)", f"{float(_row_res['prob_rival_pares_condicionada']):.1%}")
             st.metric("P(rival tiene juego)", f"{float(_row_res['prob_rival_juego_condicionada']):.1%}")
-        st.caption("✱ Probabilidades condicionales a participar en el lance. Calculadas sobre 3M distribuciones (baraja 8 reyes).")
+        st.caption(
+            "✱ Pares/Juego: probabilidades condicionales a participar (3M simulaciones). "
+            "Grande/Chica ajustadas por desempate según tu posición. "
+            "El EV de todos los lances aplica el factor de desempate por posición."
+        )
 
     if st.button("🔮 Analizar mano", type="primary", use_container_width=True):
         motor = _load_motor(perfil)
@@ -307,6 +326,24 @@ with tab2:
             f"Rivales: J{rivales2[0]} y J{rivales2[1]}"
         )
 
+        # ── Mano final propia ────────────────────────────────
+        st.markdown("**Tu mano final (tras las segundas):**")
+        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+        with col_s1:
+            s1 = st.selectbox("Carta 1", BARAJA_8R, index=7,
+                              format_func=lambda x: NOMBRES_CARTA[x], key="s1")
+        with col_s2:
+            s2 = st.selectbox("Carta 2", BARAJA_8R, index=7,
+                              format_func=lambda x: NOMBRES_CARTA[x], key="s2")
+        with col_s3:
+            s3 = st.selectbox("Carta 3", BARAJA_8R, index=0,
+                              format_func=lambda x: NOMBRES_CARTA[x], key="s3")
+        with col_s4:
+            s4 = st.selectbox("Carta 4", BARAJA_8R, index=7,
+                              format_func=lambda x: NOMBRES_CARTA[x], key="s4")
+        mano_seg = [s1, s2, s3, s4]
+        st.write(f"**Mano:** {' · '.join(NOMBRES_CARTA[c] for c in mano_seg)}")
+
         # ── Cartas guardadas ─────────────────────────────────
         st.markdown("**¿Cuántas cartas guarda cada jugador?**")
         col_comp, col_r1, col_r2 = st.columns(3)
@@ -325,23 +362,6 @@ with tab2:
                 f"J{rivales2[1]} — Rival 2",
                 [1, 2, 3, 4], index=1, key="n_rival2"
             )
-
-        # ── Mano final propia ────────────────────────────────
-        st.markdown("**Tu mano final (tras las segundas):**")
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-        with col_s1:
-            s1 = st.selectbox("Carta 1", BARAJA_8R, index=7,
-                              format_func=lambda x: NOMBRES_CARTA[x], key="s1")
-        with col_s2:
-            s2 = st.selectbox("Carta 2", BARAJA_8R, index=7,
-                              format_func=lambda x: NOMBRES_CARTA[x], key="s2")
-        with col_s3:
-            s3 = st.selectbox("Carta 3", BARAJA_8R, index=0,
-                              format_func=lambda x: NOMBRES_CARTA[x], key="s3")
-        with col_s4:
-            s4 = st.selectbox("Carta 4", BARAJA_8R, index=7,
-                              format_func=lambda x: NOMBRES_CARTA[x], key="s4")
-        mano_seg = [s1, s2, s3, s4]
 
         if st.button("📡 Calcular probabilidades a segundas", type="primary", use_container_width=True):
             row = _buscar_segundas(df_seg, mano_seg, posicion, n_comp, n_rival1, n_rival2)
