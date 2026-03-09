@@ -1,22 +1,125 @@
 """
-Probabilidades de Victoria "A Segundas" Condicionadas al Descarte Rival.
+Estimación Monte Carlo de Probabilidades de Victoria "A Segundas"
+Condicionadas al Número de Cartas Guardadas por Cada Rival.
 
-Para cada combinación de (mano_final_j1, n_cartas_guardadas_j2, n_cartas_guardadas_j3,
-n_cartas_guardadas_j4), calcula mediante simulación Monte Carlo:
-  - P(J1 gana Grande)
-  - P(J1 gana Chica)
-  - P(Equipo A gana Pares)
-  - P(Equipo A gana Juego/Punto)
+==============================================================================
+MODELO MATEMÁTICO
+==============================================================================
 
-Modelo de simulación:
-  - J1 tiene su mano final conocida (4 cartas fijas)
-  - Los 36 cartas restantes se reparten: 4 iniciales a J2, 4 a J3, 4 a J4 + 24 sin repartir
-  - Cada jugador "guarda" n_kept cartas de su mano inicial (aleatorio) y descarta el resto
-  - Los descartados se devuelven al pozo y cada jugador roba hasta completar 4 cartas
+PROBLEMA DE ESTIMACIÓN
+──────────────────────
+Sea h₁ ∈ H la mano final (conocida) del jugador focal J1, pos₁ ∈ {1,2,3,4}
+su posición en la mesa, y k_j ∈ {0,1,2,3} el número de cartas que el jugador
+j ha guardado tras la fase de descarte (señal observable). Se desea estimar:
 
-Outputs:
-  - probabilidades_segundas.csv   : tabla completa (330 manos × 64 configs)
-  - resumen_segundas.csv          : agregado por config (64 configs) promediando manos
+    P(J1 gana lance L | h₁, pos₁, k₂, k₃, k₄)   ∀ L ∈ {Grande, Chica, Pares, Juego}
+
+ESPACIO DE PROBABILIDAD
+───────────────────────
+Sea B la baraja (|B| = 40 con 8 reyes, |B| = 36 con 4 reyes). Fijada h₁,
+el espacio muestral elemental es el conjunto de asignaciones de manos finales:
+
+    Ω = { (h₂, h₃, h₄) : hⱼ ⊂ B \ h₁, |hⱼ| = 4, h₂ ∩ h₃ = h₂ ∩ h₄ = h₃ ∩ h₄ = ∅ }
+
+PROCESO DE DESCARTE
+───────────────────
+En la fase de Mus, cada jugador j recibe un reparto inicial rⱼ (4 cartas
+tomadas uniformemente de B \ h₁ \ repartidas_previas), aplica una política
+de descarte πⱼ : H × {1..4} → P({0,1,2,3}) que selecciona los índices de
+las cartas a eliminar, y roba tantas cartas como descartó para completar 4.
+Definimos:
+
+    n_kept_j := 4 − |πⱼ(rⱼ, posⱼ)|  ∈ {0, 1, 2, 3}
+
+    n_kept = 0  →  descarta las 4 cartas (cambio de Mus completo)
+    n_kept = 3  →  descarta únicamente 1 carta
+    n_kept = 4  es imposible: si un jugador pide Mus, descarta al menos 1.
+
+POLÍTICA ÓPTIMA π*
+──────────────────
+La política π* se obtiene de la Q-table calculada en la Fase 2 del proyecto.
+Para cada par (mano, posición) se elige la máscara de descarte que maximiza
+el reward esperado (valor de juego estimado):
+
+    π*(h, pos) = arg max_{m ∈ M} Q(h, pos, m)
+
+donde M = MASCARAS_DESCARTE contiene las 15 máscaras posibles de descarte
+de un subconjunto no vacío de {0,1,2,3} (índices de la mano ordenada desc.).
+
+ESTIMADOR POR REJECTION SAMPLING
+─────────────────────────────────
+El estimador es una media de Monte Carlo condicionada bajo π*:
+
+    P̂(J1 gana L) = (1 / N_acc) · Σᵢ₌₁^{N_acc}  1[J1 gana L en ωᵢ]
+
+donde {ωᵢ} son muestras aceptadas mediante el siguiente algoritmo:
+
+  Algoritmo RS (Rejection Sampling bajo política óptima):
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ for t = 1 … MAX_ATTEMPTS:                                                │
+  │   1. Proponer  : muestrear uniformemente (r₂, r₃, r₄) ⊂ B \ h₁         │
+  │   2. Políticas : calcular π*(rⱼ, posⱼ) para cada j ∈ {comp, r1, r2}    │
+  │   3. Observables: n̂ⱼ = 4 − |π*(rⱼ, posⱼ)|                             │
+  │   4. Aceptar si: n̂₂ = k₂  ∧  n̂₃ = k₃  ∧  n̂₄ = k₄                    │
+  │      Rechazar (continue) en otro caso                                    │
+  │   5. Completar : cada rival roba (4 − n̂ⱼ) cartas del pozo residual     │
+  │   6. Evaluar   : computar ganadores de cada lance L sobre {h₁,h₂,h₃,h₄} │
+  │   7. Acumular  : incrementar win_L si J1 gana el lance L                │
+  │ devolver P̂ si N_acc ≥ N_SIMS_MIN; None si la config es inviable bajo π* │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+La distribución muestral aceptada es proporcional a:
+
+    P_acc(r₂, r₃, r₄) ∝  P_prior(r₂, r₃, r₄) · 1[π* produce (k₂, k₃, k₄)]
+
+lo que equivale, por el teorema de Bayes, a la distribución condicional
+  P(r₂, r₃, r₄ | k₂, k₃, k₄) bajo la hipótesis de que los rivales juegan con π*.
+
+GARANTÍAS ESTADÍSTICAS
+──────────────────────
+Por el Teorema Central del Límite, P̂ es asintóticamente normal:
+
+    √N_acc · (P̂ − p)  →ᵈ  N(0, p(1−p))
+
+El intervalo de confianza al 95% (z = 1.96) es:
+
+    P̂  ±  1.96 · √( P̂(1−P̂) / N_acc )
+
+El peor caso en varianza es p = 0.5, con anchura máxima 1.96 · √(0.25 / n):
+
+    Error máx. E = 1.96 · √(0.25 / n)   ⟹   n_min = ⌈ (1.96 / E)² · 0.25 ⌉
+
+    ┌─────────┬────────────┬──────────────────────────────────────────────────┐
+    │   E     │   n_min    │  Uso en este módulo                              │
+    ├─────────┼────────────┼──────────────────────────────────────────────────┤
+    │   1 %   │   9 604    │  N_SIMS_TARGET — objetivo para estados comunes   │
+    │   5 %   │     385    │  N_SIMS_MIN    — mínimo; si N_acc < 385 → None   │
+    └─────────┴────────────┴──────────────────────────────────────────────────┘
+
+DIMENSIONAMIENTO DE MAX_ATTEMPTS
+─────────────────────────────────
+Sea αⱼ = P(π*(rⱼ, posⱼ) produce exactamente kⱼ cartas guardadas) la tasa de
+aceptación marginal para el jugador j. Bajo independencia de los repartos:
+
+    α_config = α₂ · α₃ · α₄     →     E[N_acc] = MAX_ATTEMPTS · α_config
+
+  Config frecuente  (kⱼ ≈ 2): αⱼ ≈ 35 %  →  α_config ≈ 4.3 %  →  E[N_acc] ≈ 21 500 ✓
+  Config rara       (kⱼ = 0): αⱼ ≈  5 %  →  α_config ≈ 0.01 % →  E[N_acc] ≈    62  → None ✓
+
+Con MAX_ATTEMPTS = 500 000 se cubren todas las configs con α_config ≥ 0.08 %
+(equivalente a αⱼ ≥ 43 % en cada jugador o αⱼ ≥ 8 % si los otros dos son 100 %).
+
+OUTPUTS
+───────
+  probabilidades_segundas.csv   330 manos × 4 posiciones × 64 configs = 84 480 filas
+                                columnas: mano, posicion_focal, n_kept_comp,
+                                          n_kept_rival1, n_kept_rival2,
+                                          prob_grande, prob_chica, prob_pares,
+                                          prob_juego, n_sims
+                                (prob_* = None para configs inviables bajo π*)
+
+  resumen_segundas.csv          Agregado por (posicion_focal, config), promediando
+                                sobre las manos; solo filas con prob_grande IS NOT NULL.
 """
 
 import sys
@@ -41,27 +144,30 @@ from mascaras_descarte import MASCARAS_DESCARTE
 from descarte_heuristico import descarte_heuristico_base
 
 # ==============================================================================
-# CONFIGURACIÓN — dimensionamiento estadístico
+# CONFIGURACIÓN — dimensionamiento estadístico del estimador
 # ==============================================================================
-# IC 95% (z=1.96) para proporción p, peor caso p=0.5:  n = (1.96/E)^2 × 0.25
-#   E=1%  → n = 9604   ← objetivo para estados comunes
-#   E=5%  → n = 385    ← mínimo aceptable para estados raros
+# Fórmula de tamaño muestral para IC 95% (z_{0.025}=1.96), peor caso p=0.5:
 #
-# Acceptance rate mínima estimada bajo Q-policy:
-#   Cada jugador: P(n_kept=0 | política) ≈ 5%  → config más rara (0,0,0): 0.05³ = 0.0125%
-#   Con MAX_ATTEMPTS=500_000: esperamos 0.0125% × 500k = 62 muestras < N_SIMS_MIN
-#   → esas configs imposibles quedan marcadas como None (correcto semánticamente).
-#   Config más frecuente (2,2,2): acceptance ≈ 0.35³ = 4.3% → 500k × 0.043 = 21.500 ≥ 9604 ✓
-N_SIMS_TARGET = 10_000   # aceptadas deseadas → IC95% con E ≤ 1%  (peor caso p=0.5)
-N_SIMS_MIN    =    400   # mínimo aceptable   → IC95% con E ≤ 5%  (peor caso p=0.5)
-MAX_ATTEMPTS  = 500_000  # tope de intentos por config (cubre acceptance ≥ 2%)
+#   n_min(E) = ⌈ (1.96 / E)² · 0.25 ⌉
+#
+#   E = 1 %  →  n_min =  9 604   →  N_SIMS_TARGET  (objetivo nominal)
+#   E = 5 %  →  n_min =    385   →  N_SIMS_MIN    (cota inferior; por debajo → None)
+#
+# Justificación de MAX_ATTEMPTS (número de propuestas máximo por config):
+#   α_config = α₂ · α₃ · α₄  (probabilidad de aceptación conjunta bajo π*)
+#   Para que E[N_acc] ≥ N_SIMS_TARGET se necesita MAX_ATTEMPTS ≥ N_SIMS_TARGET / α_config
+#   Config objetivo (α_config ≈ 4.3 %):  500 000 × 0.043 ≈ 21 500 ≥ N_SIMS_TARGET  ✓
+#   Config rara    (α_config ≈ 0.012%):  500 000 × 0.00012 ≈ 62 < N_SIMS_MIN → None  ✓
+N_SIMS_TARGET = 10_000   # N_acc objetivo        →  IC95% con E ≤ 1 %  (peor caso p = 0.5)
+N_SIMS_MIN    =    400   # N_acc mínimo aceptable →  IC95% con E ≤ 5 %  (peor caso p = 0.5)
+MAX_ATTEMPTS  = 500_000  # propuestas máximas     →  cubre toda config con α_config ≥ 0.08 %
 
 ARCHIVO_SALIDA = Path(__file__).parent / "probabilidades_segundas.csv"
 ARCHIVO_RESUMEN = Path(__file__).parent / "resumen_segundas.csv"
 
-# Equipos: A=(1,3), B=(2,4)
-# Para cada posición focal, calcula quién es compañero y quiénes son rivales
-# La clave de esta tabla es: {focal_pos: (partner_pos, [rival1_pos, rival2_pos])}
+# Estructura de equipos: A = {J1, J3},  B = {J2, J4}.
+# Para cada posición focal se precalculan el compañero y los dos rivales.
+# Formato: { pos_focal: (pos_compañero, [pos_rival1, pos_rival2]) }
 _EQUIPO_MAP = {
     1: (3, [2, 4]),
     2: (4, [1, 3]),
@@ -70,23 +176,39 @@ _EQUIPO_MAP = {
 }
 
 def _otras_ordenadas(focal_pos):
-    """Devuelve (partner, rival1, rival2) en orden global de pos ascendente."""
+    """Devuelve (compañero, rival1, rival2) ordenados por posición global ascendente."""
     partner, rivales = _EQUIPO_MAP[focal_pos]
     return partner, rivales[0], rivales[1]
 
 
 # ==============================================================================
-# Q-TABLE POLICY — cargada una vez por worker (Pool initializer)
+# Q-TABLE π* — cargada una vez por worker mediante Pool initializer
 # ==============================================================================
+# Formato del diccionario:
+#   _POLITICAS_DICT[(h, pos)] = mascara
+#   h       : tuple[int] — mano ordenada descendente (|h| = 4)
+#   pos     : int        — posición global del jugador (1..4)
+#   mascara : tuple[int] — índices de las cartas a descartar (subconjunto de {0,1,2,3})
+#                          según MASCARAS_DESCARTE[mascara_idx] de politicas_optimas_fase2.csv
 
-_POLITICAS_DICT = {}  # {(mano_tuple_desc, pos): mascara_tuple_de_indices}
+_POLITICAS_DICT = {}  # (mano_desc_tuple, pos_int) → mascara_tuple
 
 
 def _worker_init():
     """
-    Inicializador del pool de workers. Carga la política óptima de descarte
-    (Q-table) en el proceso worker para usarla en rejection sampling.
-    La clave es (mano_sorted_desc, posicion) → máscara de índices a descartar.
+    Inicializador del pool de workers multiprocessing.
+
+    Lee ``politicas_optimas_fase2.csv`` y construye el diccionario global
+    ``_POLITICAS_DICT`` con la política óptima π* para cada par (mano, posición):
+
+        π*(h, pos) = arg max_{m ∈ M} Q(h, pos, m)
+
+    Se elige la máscara de mayor reward_promedio para cada (mano, posición).
+    Las manos se normalizan a orden descendente para garantizar consistencia
+    con la representación usada en simular_config.
+
+    Complejidad: O(|politicas| · log|politicas|) por el sort interno.
+    Se ejecuta una única vez por proceso worker, antes de procesar tareas.
     """
     global _POLITICAS_DICT
     politicas_path = Path(__file__).parent / "politicas_optimas_fase2.csv"
@@ -102,20 +224,30 @@ def _worker_init():
 
 def _one_attempt(remaining_36, n_kept_targets, pos_otros):
     """
-    Un intento de muestreo con rejection sampling bajo política Q-table.
+    Ejecuta una única iteración del Algoritmo RS (ver docstring del módulo).
 
-    Reparte 4 cartas a cada uno de los 3 rivales/compañero desde `remaining_36`,
-    aplica la política óptima a cada uno y comprueba si el n_kept resultante
-    coincide con el observable `n_kept_targets`. Si alguno no coincide → REJECTION.
+    Implementa los pasos 1–5 del algoritmo:
+      1. Propone un reparto aleatorio uniforme: baraja ``remaining_36`` y
+         toma 4 cartas consecutivas para cada jugador j ∈ pos_otros.
+      2. Aplica π*(rⱼ, posⱼ). Si la mano no está en _POLITICAS_DICT
+         (mano no vista en entrenamiento), usa descarte_heuristico_base como
+         fallback conservador.
+      3. Calcula n̂ⱼ = 4 − |π*(rⱼ, posⱼ)|.
+      4. Acepta si n̂ⱼ = kⱼ ∀j; rechaza (return None, False) en otro caso.
+      5. Completa las manos finales robando (4 − n̂ⱼ) cartas del pozo residual
+         (24 cartas sin repartir + todas las descartadas en este intento).
+
+    Nota: el rechazo ocurre en cuanto falla el primer jugador, sin procesar
+    los restantes, para minimizar el coste por intento rechazado.
 
     Args:
-        remaining_36  : list[int] — las 36 cartas que no tiene el jugador focal
-        n_kept_targets: list[int] — [n_comp, n_r1, n_r2] cartas observadas guardadas
-        pos_otros     : list[int] — posiciones globales en el mismo orden
+        remaining_36   : list[int]  — 36 cartas disponibles (B \ h₁)
+        n_kept_targets : list[int]  — [k_comp, k_r1, k_r2] observables
+        pos_otros      : list[int]  — posiciones globales en el mismo orden
 
     Returns:
-        (manos_finales, True)  si todos los n_kept coinciden con la política
-        (None, False)          si alguno no coincide (rejection)
+        (manos_finales, True)   si todos los n̂ⱼ coinciden con kⱼ
+        (None, False)           si algún n̂ⱼ ≠ kⱼ  (rechazo)
     """
     pool = remaining_36.copy()
     random.shuffle(pool)
@@ -162,7 +294,19 @@ def _one_attempt(remaining_36, n_kept_targets, pos_otros):
 # ==============================================================================
 
 def cargar_manos_unicas():
-    """Carga las 330 manos únicas de politicas_optimas_fase2.csv."""
+    """
+    Carga el universo de manos únicas presentes en ``politicas_optimas_fase2.csv``.
+
+    El conjunto de manos únicas corresponde a todas las combinaciones con
+    repetición de 4 cartas de la baraja (orden no relevante), que en una
+    baraja de 40 cartas asciende a C(40+4-1,4) sin repetición = C(43,4);
+    con el filtro de las manos efectivamente vistas en la Q-table, la cifra
+    práctica es 330 manos.
+
+    Returns:
+        list[tuple[int]] — manos ordenadas descendentemente (consistente con
+        la representación interna de comparar_grande_chica y _POLITICAS_DICT).
+    """
     politicas_path = Path(__file__).parent / "politicas_optimas_fase2.csv"
     df = pd.read_csv(politicas_path)
     # Las manos están como string "[x, y, z, w]", convertir a tupla
@@ -179,18 +323,26 @@ def cargar_manos_unicas():
 
 def simular_manos_rivales(remaining_36, n_kept_otros):
     """
-    Simula las manos finales de los 3 jugadores restantes dado cuántas cartas
-    ha guardado cada uno (n_kept_otros = [n2, n3, n4]).
+    [DEPRECATED — no se usa en la simulación principal]
 
-    Proceso:
-      1. Barajar los 36 cartas restantes
-      2. Repartir 4 iniciales a cada jugador (12 en total)
-      3. Cada jugador guarda n_i cartas aleatorias de su mano inicial
-      4. Los descartados van al pozo (24 undealt + descartados)
-      5. Cada jugador roba hasta completar 4
+    Genera las manos finales de 3 jugadores con descarte ALEATORIO (no bajo π*).
+    Conservada únicamente como referencia; el estimador correcto usa rejection
+    sampling bajo la política óptima a través de ``_one_attempt``.
+
+    Diferencia fundamental con ``_one_attempt``:
+      • Esta función muestrea de P(h₂, h₃, h₄) incondicional (prior uniforme).
+      • ``_one_attempt`` muestrea de P(h₂, h₃, h₄ | k₂, k₃, k₄) bajo π*.
+    Usar esta función para estimar P(J1 gana | kⱼ) produce sesgo: la
+    distribución marginal del descarte aleatorio no respeta la información
+    contenida en la señal kⱼ, resultando en probabilidades prácticamente
+    idénticas a las incondicionales (primeras).
+
+    Args:
+        remaining_36  : list[int]  — cartas disponibles (B \ h₁)
+        n_kept_otros  : list[int]  — [n₂, n₃, n₄] cartas a guardar (aleatorio)
 
     Returns:
-        list[list]: [mano_j2_final, mano_j3_final, mano_j4_final]
+        list[list[int]] — [mano_j2_final, mano_j3_final, mano_j4_final]
     """
     pool = remaining_36.copy()
     random.shuffle(pool)
@@ -230,15 +382,35 @@ def simular_manos_rivales(remaining_36, n_kept_otros):
 
 def simular_config(args):
     """
-    Worker: estima P(victoria lance) para un estado (mano_focal, pos, n_comp, n_r1, n_r2)
-    mediante rejection sampling bajo política Q-table.
+    Función worker: estima el vector de probabilidades de victoria para un
+    estado (h₁, pos₁, k₂, k₃, k₄) mediante el Algoritmo RS completo.
 
-    Ejecuta hasta MAX_ATTEMPTS intentos. Acepta solo los intentos en que los
-    tres rivales/compañero aplican su política óptima y obtienen exactamente
-    n_kept_* cartas guardadas. Si n_accepted < N_SIMS_MIN → devuelve None en
-    todas las probabilidades (config imposible bajo política óptima).
+    Implementa el estimador de Monte Carlo condicionado:
 
-    n_kept ∈ {0,1,2,3}: 0=descarta todas las cartas, 3=descarta solo 1.
+        P̂_L = win_L / N_acc   ∀ L ∈ {Grande, Chica, Pares, Juego}
+
+    donde N_acc = número de intentos aceptados (N_acc ≤ N_SIMS_TARGET).
+
+    Criterio de calidad:
+      • N_acc ≥ N_SIMS_TARGET  →  IC95% con E ≤ 1 %  (estado bien muestreado)
+      • N_SIMS_MIN ≤ N_acc < N_SIMS_TARGET  →  IC95% con E ≤ 5 %  (aceptable)
+      • N_acc < N_SIMS_MIN  →  config inviable bajo π*: se devuelven None
+        en las cuatro probabilidades (señal de config estadísticamente inválida).
+
+    Nota sobre el orden de la mano focal:
+      ``comparar_grande_chica`` realiza comparación carta a carta por índice;
+      todas las manos deben estar en el mismo orden (descendente). La mano
+      focal se normaliza al inicio con sorted(reverse=True).
+
+    Args:
+        args : tuple — (mano, focal_pos, n_kept_comp, n_kept_rival1,
+                        n_kept_rival2, baraja_full, _)
+               El último elemento es ignorado (placeholder de compatibilidad).
+
+    Returns:
+        dict con claves: mano, posicion_focal, n_kept_comp, n_kept_rival1,
+        n_kept_rival2, prob_grande, prob_chica, prob_pares, prob_juego, n_sims.
+        Las probabilidades son float ∈ [0,1] o None si N_acc < N_SIMS_MIN.
     """
     mano_focal, focal_pos, n_kept_comp, n_kept_rival1, n_kept_rival2, baraja_full, _ = args
 
