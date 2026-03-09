@@ -211,6 +211,12 @@ def _worker_init():
     Complejidad: O(|politicas| · log|politicas|) por el sort interno.
     Se ejecuta una única vez por proceso worker, antes de procesar tareas.
     """
+    # Ignorar SIGINT en workers: el Ctrl+C del proceso principal (o de la consola
+    # compartida en Windows) no debe matar a los workers en mitad de un cálculo.
+    # El proceso principal es responsable de terminar el pool ordenadamente.
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     global _POLITICAS_DICT
     politicas_path = Path(__file__).parent / "politicas_optimas_fase2.csv"
     df = pd.read_csv(politicas_path)
@@ -539,6 +545,9 @@ def main():
                 for result in pool.imap_unordered(simular_config, worker_args, chunksize=1):
                     results.append(result)
                     pbar.update(1)
+    except KeyboardInterrupt:
+        print("\nSimulacion interrumpida por el usuario. Saliendo.")
+        sys.exit(1)
     except Exception as e:
         print(f"Multiprocessing fallo ({e}), modo single-process...")
         _worker_init()  # cargar politicas en proceso principal
