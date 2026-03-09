@@ -533,22 +533,21 @@ def main():
     try:
         ctx = multiprocessing.get_context('spawn')
         with ctx.Pool(n_workers, initializer=_worker_init) as pool:
-            results = list(tqdm(
-                pool.imap_unordered(simular_config, worker_args, chunksize=32),
-                total=len(worker_args),
-                desc="Simulando",
-                unit="cfg",
-                dynamic_ncols=True,
-            ))
+            results = []
+            with tqdm(total=len(worker_args), desc="Simulando", unit="cfg",
+                      dynamic_ncols=True) as pbar:
+                for result in pool.imap_unordered(simular_config, worker_args, chunksize=64):
+                    results.append(result)
+                    pbar.update(1)
     except Exception as e:
         print(f"Multiprocessing fallo ({e}), modo single-process...")
         _worker_init()  # cargar politicas en proceso principal
-        results = list(tqdm(
-            (simular_config(a) for a in worker_args),
-            total=len(worker_args),
-            desc="Simulando (single-process)",
-            unit="cfg",
-        ))
+        results = []
+        with tqdm(total=len(worker_args), desc="Simulando (single-process)",
+                  unit="cfg") as pbar:
+            for result in (simular_config(a) for a in worker_args):
+                results.append(result)
+                pbar.update(1)
 
     # Construir DataFrame
     df = pd.DataFrame(results)
