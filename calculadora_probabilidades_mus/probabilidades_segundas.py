@@ -132,6 +132,7 @@ import ast
 from pathlib import Path
 from collections import defaultdict
 from itertools import product
+from tqdm import tqdm
 
 # Paths
 sys.path.insert(0, str(Path(__file__).parent))
@@ -525,15 +526,29 @@ def main():
     # Lanzar pool multiproceso
     n_workers = min(multiprocessing.cpu_count(), 4)
     print(f"Lanzando {n_workers} workers en paralelo ({len(worker_args):,} tareas)...")
+    print(f"Estimacion de duracion: ~{len(worker_args)*3.7/n_workers/3600:.0f}h  "
+          f"(benchmark: 1.2s configs comunes, 4s configs raras, media ~3.7s/tarea)")
+    print()
 
     try:
         ctx = multiprocessing.get_context('spawn')
         with ctx.Pool(n_workers, initializer=_worker_init) as pool:
-            results = pool.map(simular_config, worker_args, chunksize=64)
+            results = list(tqdm(
+                pool.imap_unordered(simular_config, worker_args, chunksize=32),
+                total=len(worker_args),
+                desc="Simulando",
+                unit="cfg",
+                dynamic_ncols=True,
+            ))
     except Exception as e:
         print(f"Multiprocessing fallo ({e}), modo single-process...")
         _worker_init()  # cargar politicas en proceso principal
-        results = [simular_config(a) for a in worker_args]
+        results = list(tqdm(
+            (simular_config(a) for a in worker_args),
+            total=len(worker_args),
+            desc="Simulando (single-process)",
+            unit="cfg",
+        ))
 
     # Construir DataFrame
     df = pd.DataFrame(results)
