@@ -37,11 +37,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
 from calculadoramus import inicializar_baraja
 from evaluador_ronda import evaluar_grande, evaluar_chica, evaluar_pares, evaluar_juego
 from params import obtener_equipo, MODO_8_REYES
+from mascaras_descarte import MASCARAS_DESCARTE
+from descarte_heuristico import descarte_heuristico_base
 
 # ==============================================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN — dimensionamiento estadístico
 # ==============================================================================
-N_SIMS_PER_CONFIG = 3000   # Simulaciones por (mano, posicion, n_comp, n_rival1, n_rival2)
+# IC 95% (z=1.96) para proporción p, peor caso p=0.5:  n = (1.96/E)^2 × 0.25
+#   E=1%  → n = 9604   ← objetivo para estados comunes
+#   E=5%  → n = 385    ← mínimo aceptable para estados raros
+#
+# Acceptance rate mínima estimada bajo Q-policy:
+#   Cada jugador: P(n_kept=0 | política) ≈ 5%  → config más rara (0,0,0): 0.05³ = 0.0125%
+#   Con MAX_ATTEMPTS=500_000: esperamos 0.0125% × 500k = 62 muestras < N_SIMS_MIN
+#   → esas configs imposibles quedan marcadas como None (correcto semánticamente).
+#   Config más frecuente (2,2,2): acceptance ≈ 0.35³ = 4.3% → 500k × 0.043 = 21.500 ≥ 9604 ✓
+N_SIMS_TARGET = 10_000   # aceptadas deseadas → IC95% con E ≤ 1%  (peor caso p=0.5)
+N_SIMS_MIN    =    400   # mínimo aceptable   → IC95% con E ≤ 5%  (peor caso p=0.5)
+MAX_ATTEMPTS  = 500_000  # tope de intentos por config (cubre acceptance ≥ 2%)
+
 ARCHIVO_SALIDA = Path(__file__).parent / "probabilidades_segundas.csv"
 ARCHIVO_RESUMEN = Path(__file__).parent / "resumen_segundas.csv"
 
@@ -59,6 +73,88 @@ def _otras_ordenadas(focal_pos):
     """Devuelve (partner, rival1, rival2) en orden global de pos ascendente."""
     partner, rivales = _EQUIPO_MAP[focal_pos]
     return partner, rivales[0], rivales[1]
+
+
+# ==============================================================================
+# Q-TABLE POLICY — cargada una vez por worker (Pool initializer)
+# ==============================================================================
+
+_POLITICAS_DICT = {}  # {(mano_tuple_desc, pos): mascara_tuple_de_indices}
+
+
+def _worker_init():
+    """
+    Inicializador del pool de workers. Carga la política óptima de descarte
+    (Q-table) en el proceso worker para usarla en rejection sampling.
+    La clave es (mano_sorted_desc, posicion) → máscara de índices a descartar.
+    """
+    global _POLITICAS_DICT
+    politicas_path = Path(__file__).parent / "politicas_optimas_fase2.csv"
+    df = pd.read_csv(politicas_path)
+    df = df.sort_values('reward_promedio', ascending=False)
+    df_best = df.drop_duplicates(subset=['mano', 'posicion'], keep='first')
+    for _, row in df_best.iterrows():
+        mano = tuple(sorted(ast.literal_eval(str(row['mano'])), reverse=True))
+        pos = int(row['posicion'])
+        mascara_idx = int(row['mascara_idx'])
+        _POLITICAS_DICT[(mano, pos)] = MASCARAS_DESCARTE[mascara_idx]
+
+
+def _one_attempt(remaining_36, n_kept_targets, pos_otros):
+    """
+    Un intento de muestreo con rejection sampling bajo política Q-table.
+
+    Reparte 4 cartas a cada uno de los 3 rivales/compañero desde `remaining_36`,
+    aplica la política óptima a cada uno y comprueba si el n_kept resultante
+    coincide con el observable `n_kept_targets`. Si alguno no coincide → REJECTION.
+
+    Args:
+        remaining_36  : list[int] — las 36 cartas que no tiene el jugador focal
+        n_kept_targets: list[int] — [n_comp, n_r1, n_r2] cartas observadas guardadas
+        pos_otros     : list[int] — posiciones globales en el mismo orden
+
+    Returns:
+        (manos_finales, True)  si todos los n_kept coinciden con la política
+        (None, False)          si alguno no coincide (rejection)
+    """
+    pool = remaining_36.copy()
+    random.shuffle(pool)
+    manos_iniciales = [pool[i*4:(i+1)*4] for i in range(3)]
+    deck_undealt = pool[12:]
+
+    manos_kept = []
+    descartadas = []
+
+    for i, (n_target, pos) in enumerate(zip(n_kept_targets, pos_otros)):
+        orig = sorted(manos_iniciales[i], reverse=True)
+        orig_tuple = tuple(orig)
+
+        # Política óptima de la Q-table; fallback heurístico si mano no vista
+        if (orig_tuple, pos) in _POLITICAS_DICT:
+            mascara = _POLITICAS_DICT[(orig_tuple, pos)]
+        else:
+            mascara = tuple(descarte_heuristico_base(orig, pos))
+
+        actual_kept = 4 - len(mascara)
+        if actual_kept != n_target:
+            return None, False   # Rejection: política no produce el observable
+
+        kept = [orig[j] for j in range(4) if j not in mascara]
+        disc = [orig[j] for j in mascara]
+        manos_kept.append(kept)
+        descartadas.extend(disc)
+
+    draw_pool = deck_undealt + descartadas
+    random.shuffle(draw_pool)
+    offset = 0
+    manos_finales = []
+    for i, n_kept in enumerate(n_kept_targets):
+        n_robar = 4 - n_kept
+        nueva_mano = sorted(manos_kept[i] + draw_pool[offset:offset + n_robar], reverse=True)
+        offset += n_robar
+        manos_finales.append(nueva_mano)
+
+    return manos_finales, True
 
 
 # ==============================================================================
@@ -134,74 +230,72 @@ def simular_manos_rivales(remaining_36, n_kept_otros):
 
 def simular_config(args):
     """
-    Worker: simula N_SIMS para una (mano_focal, focal_pos, n_comp, n_rival1, n_rival2).
+    Worker: estima P(victoria lance) para un estado (mano_focal, pos, n_comp, n_r1, n_r2)
+    mediante rejection sampling bajo política Q-table.
 
-    Parámetros de args:
-        mano_focal   : tuple con 4 cartas del jugador focal
-        focal_pos    : posición del jugador focal (1-4)
-        n_kept_comp  : cartas guardadas por el compañero
-        n_kept_rival1: cartas guardadas por el rival 1
-        n_kept_rival2: cartas guardadas por el rival 2
-        baraja_full  : lista completa de 40 cartas
-        n_sims       : número de simulaciones
+    Ejecuta hasta MAX_ATTEMPTS intentos. Acepta solo los intentos en que los
+    tres rivales/compañero aplican su política óptima y obtienen exactamente
+    n_kept_* cartas guardadas. Si n_accepted < N_SIMS_MIN → devuelve None en
+    todas las probabilidades (config imposible bajo política óptima).
 
-    Returns dict con probabilidades estimadas.
+    n_kept ∈ {0,1,2,3}: 0=descarta todas las cartas, 3=descarta solo 1.
     """
-    mano_focal, focal_pos, n_kept_comp, n_kept_rival1, n_kept_rival2, baraja_full, n_sims = args
+    mano_focal, focal_pos, n_kept_comp, n_kept_rival1, n_kept_rival2, baraja_full, _ = args
 
-    # Ordenar mano focal descendente (como las manos rivales de simular_manos_rivales)
-    # comparar_grande_chica compara carta por carta → el orden debe ser consistente
+    # Ordenar descendente: comparar_grande_chica es carta-a-carta, el orden debe ser consistente
     mano_focal = tuple(sorted(mano_focal, reverse=True))
 
-    # Determinar otras posiciones en orden global ascendente
+    # Otras posiciones en orden ascendente global
     partner_pos, rival1_pos, rival2_pos = _otras_ordenadas(focal_pos)
-    # Mapear cuántas guardan según su posición global
-    n_kept_other = {}  # {pos_global: n_kept}
-    n_kept_other[partner_pos] = n_kept_comp
-    n_kept_other[rival1_pos]  = n_kept_rival1
-    n_kept_other[rival2_pos]  = n_kept_rival2
-
-    # Orden esperado por simular_manos_rivales: otras posiciones en orden global
-    otras_pos = sorted(n_kept_other.keys())
+    n_kept_other = {
+        partner_pos: n_kept_comp,
+        rival1_pos:  n_kept_rival1,
+        rival2_pos:  n_kept_rival2,
+    }
+    otras_pos    = sorted(n_kept_other.keys())
     n_kept_otros = [n_kept_other[p] for p in otras_pos]
 
-    # Construir deck sin las cartas de la mano focal
     remaining = list(baraja_full)
     for card in mano_focal:
         remaining.remove(card)
 
     equipo_focal = obtener_equipo(focal_pos)
+    win_grande = win_chica = win_pares = win_juego = accepted = 0
 
-    win_grande = 0
-    win_chica = 0
-    win_pares = 0
-    win_juego = 0
+    for _ in range(MAX_ATTEMPTS):
+        if accepted >= N_SIMS_TARGET:
+            break
 
-    for _ in range(n_sims):
-        manos_otros = simular_manos_rivales(remaining, n_kept_otros)
+        manos_otros, ok = _one_attempt(remaining, n_kept_otros, otras_pos)
+        if not ok:
+            continue
+
+        accepted += 1
         manos = {focal_pos: list(mano_focal)}
         for i, pos in enumerate(otras_pos):
             manos[pos] = manos_otros[i]
 
-        # Grande
-        gan_grande = evaluar_grande(manos)
-        if gan_grande == focal_pos:
+        if evaluar_grande(manos) == focal_pos:
             win_grande += 1
-
-        # Chica
-        gan_chica = evaluar_chica(manos)
-        if gan_chica == focal_pos:
+        if evaluar_chica(manos) == focal_pos:
             win_chica += 1
-
-        # Pares
-        gan_pares, tipo_pares, _, _ = evaluar_pares(manos)
+        gan_pares, _, _, _ = evaluar_pares(manos)
         if gan_pares is not None and obtener_equipo(gan_pares) == equipo_focal:
             win_pares += 1
-
-        # Juego/Punto
         gan_juego, _, _ = evaluar_juego(manos)
         if obtener_equipo(gan_juego) == equipo_focal:
             win_juego += 1
+
+    if accepted < N_SIMS_MIN:
+        # Config inviable bajo política óptima: n_accepted demasiado bajo para IC fiable
+        return {
+            'mano': list(mano_focal), 'posicion_focal': focal_pos,
+            'n_kept_comp': n_kept_comp, 'n_kept_rival1': n_kept_rival1,
+            'n_kept_rival2': n_kept_rival2,
+            'prob_grande': None, 'prob_chica': None,
+            'prob_pares': None, 'prob_juego': None,
+            'n_sims': accepted,
+        }
 
     return {
         'mano': list(mano_focal),
@@ -209,11 +303,11 @@ def simular_config(args):
         'n_kept_comp': n_kept_comp,
         'n_kept_rival1': n_kept_rival1,
         'n_kept_rival2': n_kept_rival2,
-        'prob_grande': win_grande / n_sims,
-        'prob_chica': win_chica / n_sims,
-        'prob_pares': win_pares / n_sims,
-        'prob_juego': win_juego / n_sims,
-        'n_sims': n_sims,
+        'prob_grande': win_grande / accepted,
+        'prob_chica':  win_chica  / accepted,
+        'prob_pares':  win_pares  / accepted,
+        'prob_juego':  win_juego  / accepted,
+        'n_sims': accepted,
     }
 
 
@@ -226,8 +320,10 @@ def main():
     print("PROBABILIDADES A SEGUNDAS - CONDICIONADO A CARTAS GUARDADAS")
     print("=" * 70)
     print(f"Posiciones : 1, 2, 3, 4 (todas)")
-    print(f"Configs/pos: 64  (comp x rival1 x rival2 in {{1,2,3,4}}^3)")
-    print(f"Sims/config: {N_SIMS_PER_CONFIG:,}")
+    print(f"Configs/pos: 64  (comp x rival1 x rival2 in {{0,1,2,3}}^3; 0=descarta todas, 3=descarta 1)")
+    print(f"N_SIMS_TARGET : {N_SIMS_TARGET:,}  (aceptadas; IC95% E<=1% para estados comunes)")
+    print(f"N_SIMS_MIN    : {N_SIMS_MIN:,}   (minimo; IC95% E<=5%; por debajo -> None)")
+    print(f"MAX_ATTEMPTS  : {MAX_ATTEMPTS:,}  (tope intentos; cubre acceptance >= 2%)")
 
     # Cargar manos únicas
     manos = cargar_manos_unicas()
@@ -236,20 +332,22 @@ def main():
     # Baraja base
     baraja_full = inicializar_baraja(MODO_8_REYES)
 
-    # Configs (n_comp, n_rival1, n_rival2) ∈ {1,2,3,4}^3
-    configs = list(product([1, 2, 3, 4], repeat=3))  # 64 configs
+    # Configs (n_comp, n_rival1, n_rival2) en {0,1,2,3}^3
+    # 0 = descarta todas las cartas (guarda 0); 3 = guarda 3 (descarta solo 1)
+    configs = list(product([0, 1, 2, 3], repeat=3))  # 64 configs
     n_total = len(manos) * len(configs) * 4           # 4 posiciones
     print(f"Total tareas: {n_total:,}")
     print()
 
-    # Construir argumentos: (mano, focal_pos, n_comp, n_rival1, n_rival2, baraja, n_sims)
+    # Construir argumentos: (mano, focal_pos, n_comp, n_rival1, n_rival2, baraja, _)
+    # El último elemento es ignorado en simular_config (usa N_SIMS_TARGET global)
     worker_args = []
     for focal_pos in [1, 2, 3, 4]:
         for mano in manos:
             for n_comp, n_r1, n_r2 in configs:
                 worker_args.append((
                     mano, focal_pos, n_comp, n_r1, n_r2,
-                    baraja_full, N_SIMS_PER_CONFIG
+                    baraja_full, None
                 ))
 
     # Lanzar pool multiproceso
@@ -258,10 +356,11 @@ def main():
 
     try:
         ctx = multiprocessing.get_context('spawn')
-        with ctx.Pool(n_workers) as pool:
+        with ctx.Pool(n_workers, initializer=_worker_init) as pool:
             results = pool.map(simular_config, worker_args, chunksize=64)
     except Exception as e:
         print(f"Multiprocessing fallo ({e}), modo single-process...")
+        _worker_init()  # cargar politicas en proceso principal
         results = [simular_config(a) for a in worker_args]
 
     # Construir DataFrame
@@ -271,13 +370,16 @@ def main():
         ['posicion_focal', 'n_kept_comp', 'n_kept_rival1', 'n_kept_rival2', 'mano']
     ).reset_index(drop=True)
 
-    # Guardar tabla completa
+    # Guardar tabla completa (incluyendo None para configs inviables)
     df.to_csv(ARCHIVO_SALIDA, index=False)
     print(f"\nTabla completa guardada: {ARCHIVO_SALIDA}")
     print(f"  Filas: {len(df):,}  |  Columnas: {list(df.columns)}")
+    n_none = df['prob_grande'].isna().sum()
+    print(f"  Configs marcadas None (imposibles bajo politica): {n_none:,} / {len(df):,} ({100*n_none/len(df):.1f}%)")
 
-    # ── Tabla resumen por posicion + config ──────────────────────────────────
-    resumen = df.groupby(
+    # ── Tabla resumen por posicion + config (solo filas validas) ────────────
+    df_valid = df.dropna(subset=['prob_grande'])
+    resumen = df_valid.groupby(
         ['posicion_focal', 'n_kept_comp', 'n_kept_rival1', 'n_kept_rival2']
     ).agg(
         prob_grande=('prob_grande', 'mean'),
@@ -297,20 +399,18 @@ def main():
     print("=" * 70)
 
     for pos in [1, 2, 3, 4]:
-        sub = df[df['posicion_focal'] == pos]
-        print(f"\n--- Posición {pos} ---")
-        rival_g = sub.groupby(['n_kept_rival1', 'n_kept_rival2'])[
-            ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
-        ].mean().round(3)
+        sub = df_valid[df_valid['posicion_focal'] == pos]
+        print(f"\n--- Posicion {pos} ---")
         comp_g = sub.groupby('n_kept_comp')[
             ['prob_grande', 'prob_chica', 'prob_pares', 'prob_juego']
         ].mean().round(3)
-        print(" Efecto compañero (por n_kept_comp):")
+        print(" Efecto companero (por n_kept_comp):")
         print(comp_g.to_string())
 
+    n_valid = len(df_valid)
     print()
     print("Archivos generados:")
-    print(f"  {ARCHIVO_SALIDA.name}  ({len(df):,} filas)")
+    print(f"  {ARCHIVO_SALIDA.name}  ({len(df):,} filas totales, {n_valid:,} con datos validos)")
     print(f"  {ARCHIVO_RESUMEN.name}  ({len(resumen):,} filas)")
 
 

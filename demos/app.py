@@ -362,18 +362,18 @@ with tab2:
         col_comp, col_r1, col_r2 = st.columns(3)
         with col_comp:
             n_comp = st.selectbox(
-                f"J{partner_pos2} — Compañero",
-                [1, 2, 3, 4], index=2, key="n_comp"
+                f"J{partner_pos2} — Compañero (0=descarta todas)",
+                [0, 1, 2, 3], index=2, key="n_comp"
             )
         with col_r1:
             n_rival1 = st.selectbox(
-                f"J{rivales2[0]} — Rival 1",
-                [1, 2, 3, 4], index=1, key="n_rival1"
+                f"J{rivales2[0]} — Rival 1 (0=descarta todas)",
+                [0, 1, 2, 3], index=1, key="n_rival1"
             )
         with col_r2:
             n_rival2 = st.selectbox(
-                f"J{rivales2[1]} — Rival 2",
-                [1, 2, 3, 4], index=1, key="n_rival2"
+                f"J{rivales2[1]} — Rival 2 (0=descarta todas)",
+                [0, 1, 2, 3], index=1, key="n_rival2"
             )
 
         if st.button("📡 Calcular probabilidades a segundas", type="primary", use_container_width=True):
@@ -386,19 +386,23 @@ with tab2:
                 st.markdown("### Probabilidades de victoria condicionadas")
                 col_g, col_c, col_p, col_j = st.columns(4)
 
-                prob_g = float(row["prob_grande"])
-                prob_c = float(row["prob_chica"])
-                prob_p = float(row["prob_pares"])
-                prob_j = float(row["prob_juego"])
+                prob_g = row.get("prob_grande")
+                prob_c = row.get("prob_chica")
+                prob_p = row.get("prob_pares")
+                prob_j = row.get("prob_juego")
 
-                with col_g:
-                    st.metric("Grande", f"{prob_g:.1%}", delta=f"{prob_g - 0.5:+.1%}")
-                with col_c:
-                    st.metric("Chica", f"{prob_c:.1%}", delta=f"{prob_c - 0.5:+.1%}")
-                with col_p:
-                    st.metric("Pares (equipo)", f"{prob_p:.1%}", delta=f"{prob_p - 0.5:+.1%}")
-                with col_j:
-                    st.metric("Juego/Punto (equipo)", f"{prob_j:.1%}", delta=f"{prob_j - 0.5:+.1%}")
+                def _fmt_metric(col, label, val):
+                    with col:
+                        if val is None or (hasattr(val, '__float__') and pd.isna(float(val))):
+                            st.metric(label, "—", help="Config imposible bajo política óptima")
+                        else:
+                            v = float(val)
+                            st.metric(label, f"{v:.1%}", delta=f"{v - 0.5:+.1%}")
+
+                _fmt_metric(col_g, "Grande", prob_g)
+                _fmt_metric(col_c, "Chica", prob_c)
+                _fmt_metric(col_p, "Pares (equipo)", prob_p)
+                _fmt_metric(col_j, "Juego/Punto (equipo)", prob_j)
 
                 st.caption(
                     f"Estimado con {int(row.get('n_sims', 3000)):,} simulaciones Monte Carlo.  \n"
