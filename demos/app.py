@@ -96,12 +96,17 @@ def _buscar_politica(df_pol, mano: list, posicion: int):
     mano_str = _mano_key(mano)
     mask = (df_pol["mano"].apply(lambda x: _mano_key(eval(str(x)))) == mano_str) & \
            (df_pol["posicion"] == posicion)
-    sub = df_pol[mask].sort_values("reward_medio", ascending=False)
+    sub = df_pol[mask].sort_values("reward_promedio", ascending=False)
     return sub if not sub.empty else None
 
 
 def _nombre_descarte(mascara_idx: int, mano: list) -> str:
-    cartas_desc = [NOMBRES_CARTA.get(c, str(c)) for k, c in enumerate(mano) if (mascara_idx >> k) & 1]
+    """mascara_idx es un índice (0-14) en MASCARAS_DESCARTE, no un bitmask.
+    Las posiciones en la máscara corresponden a la mano ordenada de mayor a menor."""
+    from mascaras_descarte import MASCARAS_DESCARTE
+    mascara = MASCARAS_DESCARTE[mascara_idx]
+    mano_desc = sorted(mano, reverse=True)
+    cartas_desc = [NOMBRES_CARTA.get(mano_desc[i], str(mano_desc[i])) for i in mascara]
     if not cartas_desc:
         return "No descartar ninguna (guardar toda la mano)"
     return "Descartar: " + ", ".join(cartas_desc)
@@ -289,7 +294,7 @@ with tab1:
                 top = sub.iloc[0]
                 try:
                     mascara = int(top["mascara_idx"])
-                    reward = float(top["reward_medio"])
+                    reward = float(top["reward_promedio"])
                     visitas = int(top.get("n_visitas", 0))
                     st.success(
                         f"**{_nombre_descarte(mascara, mano)}**  \n"
@@ -299,9 +304,13 @@ with tab1:
                     st.dataframe(top)
 
                 with st.expander("Ver todas las opciones de descarte"):
-                    show_cols = [c for c in ["mascara_idx", "reward_medio", "n_visitas"]
+                    show_cols = [c for c in ["mascara_idx", "reward_promedio", "n_visitas"]
                                  if c in sub.columns]
-                    st.dataframe(sub[show_cols].head(10).reset_index(drop=True))
+                    _exp_df = sub[show_cols].head(10).copy().reset_index(drop=True)
+                    _exp_df.insert(0, "descarte", _exp_df["mascara_idx"].apply(
+                        lambda idx: _nombre_descarte(int(idx), mano)
+                    ))
+                    st.dataframe(_exp_df, use_container_width=True)
 
 
 # ══════════════════════════════════════
@@ -481,6 +490,6 @@ with tab3:
 # ── Footer ───────────────────────────────────────────────
 st.divider()
 st.caption(
-    "Motor IA · Probabilidades-Mus v2.5 · "
+    "Motor IA · Probabilidades-Mus v2.6 · "
     "[GitHub](https://github.com/Marco-Ezquerra/Probabilidades-Mus)"
 )

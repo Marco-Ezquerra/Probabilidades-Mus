@@ -149,6 +149,10 @@ def simular_config(args):
     """
     mano_focal, focal_pos, n_kept_comp, n_kept_rival1, n_kept_rival2, baraja_full, n_sims = args
 
+    # Ordenar mano focal descendente (como las manos rivales de simular_manos_rivales)
+    # comparar_grande_chica compara carta por carta → el orden debe ser consistente
+    mano_focal = tuple(sorted(mano_focal, reverse=True))
+
     # Determinar otras posiciones en orden global ascendente
     partner_pos, rival1_pos, rival2_pos = _otras_ordenadas(focal_pos)
     # Mapear cuántas guardan según su posición global
