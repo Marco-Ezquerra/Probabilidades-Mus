@@ -1,6 +1,6 @@
 # Módulo de Decisión de Corte — Estado Actual y Trabajo Futuro
 
-> **Versión actual**: 2.5 (marzo 2026)  
+> **Versión actual**: 2.6 (marzo 2026)  
 > **Ficheros relevantes**: `calculadora_probabilidades_mus/motor_decision.py` · `calculadora_probabilidades_mus/params.py`
 
 ---
@@ -157,6 +157,50 @@ Una vez disponibles datos de expertos, validar mediante:
 - **Accuracy de decisión**: ¿en qué % de casos el motor coincide con el maestro?
 - **EV medio de la decisión**: ¿las partidas simuladas con parámetros calibrados producen más puntos que con los actuales?
 - **Tasa de mus observada vs. objetivo**: contrastar el 20% teórico con datos reales.
+
+---
+
+## 5. Correcciones de desempate por posición (v2.6)
+
+En v2.6 se corrigió un sesgo sistemático en el cálculo de probabilidades: el CSV base (`resultados_8reyes.csv`) fue generado con `es_mano=True` para todas las manos, lo que equivale a asumir que la posición 1 gana todos los desempates. Para posiciones 2, 3 y 4 esto sobreestima la probabilidad de victoria.
+
+### 5.1 Factor de desempate
+
+```python
+factor_des = {1: 1.0, 2: 0.5, 3: 0.5, 4: 0.0}[posicion]
+```
+
+- **Posición 1 (Mano)**: gana todos los empates → `factor_des = 1.0`
+- **Posiciones 2 y 3**: ganan/pierden la mitad → `factor_des = 0.5`
+- **Posición 4 (Postre)**: pierde todos los empates → `factor_des = 0.0`
+
+### 5.2 Grande y Chica
+
+La corrección se aplica analíticamente antes del cálculo del EV:
+
+$$P_{\text{adj}} = \max\!\bigl(0,\; P_{\text{CSV}} - 2 \cdot P_{\text{empate}} \cdot (1 - f_{\text{des}})\bigr)$$
+
+Donde $P_{\text{empate}}$ es la probabilidad de empate exacto calculada combinatoriamente sobre las 36 cartas restantes (método `_calcular_probs_empate_gc`). El factor $2$ tiene en cuenta que hay dos rivales.
+
+### 5.3 Pares
+
+```python
+P(\text{victoria pares}) = (1 - P_{\text{RL}}) + P_{\text{RL}} \cdot (p_{\text{menor}} + p_{\text{empate}} \cdot f_{\text{des}})
+```
+
+Donde $P_{\text{RL}}$ es la probabilidad de que el rival tenga pares (del CSV), y $p_{\text{menor}}$, $p_{\text{empate}}$ se obtienen de la distribución exacta sobre el ranking de pares (par < medias < duples).
+
+### 5.4 Juego y Punto
+
+**Con juego:**
+
+$$P(\text{victoria juego}) = (1 - P_{\text{RL}}) + P_{\text{RL}} \cdot (p_{\text{menor\_j}} + p_{\text{empate\_j}} \cdot f_{\text{des}})$$
+
+**Sin juego (punto):**
+
+$$P(\text{victoria punto}) = (1 - P_{\text{RL}}) \cdot (p_{\text{menor\_p}} + p_{\text{empate\_p}} \cdot f_{\text{des}})$$
+
+> Nota: si el jugador no tiene juego solo puede ganar el lance de Punto cuando *ningún* rival tiene juego (factor $1 - P_{\text{RL}}$) y dentro de ese escenario gana si su punto es superior o si hay empate y tiene ventaja de posición.
 
 ---
 

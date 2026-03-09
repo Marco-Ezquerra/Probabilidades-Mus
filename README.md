@@ -2,7 +2,7 @@
 
 > **El Mus es un juego de información imperfecta**: los jugadores toman decisiones con cartas parcialmente ocultas, sin saber qué tiene el rival. El reto matemático es cuantificar el valor de cada mano frente a un adversario desconocido y actualizar esa estimación en tiempo real conforme se revela información (cuántas cartas descarta cada rival). Este sistema lo resuelve combinando **cálculo exacto de probabilidades condicionadas** mediante distribución hipergeométrica sobre las 330 manos únicas de la baraja de 8 reyes, con **Q-Learning por rollout completo** (40 millones de partidas simuladas) para aprender políticas de descarte óptimas. El resultado es un motor de decisión estocástico con fundamento matemático riguroso, calibrables a tres perfiles de agresividad y con interfaz web interactiva.
 
-**Versión**: v2.5 — Marzo 2026 · **Autor**: Marco Ezquerra · **Lances**: Grande, Chica, Pares, Juego y Punto
+**Versión**: v2.6 — Marzo 2026 · **Autor**: Marco Ezquerra · **Lances**: Grande, Chica, Pares, Juego y Punto
 
 ---
 
@@ -17,7 +17,9 @@
 - **Política estocástica** (sigmoide con ruido gaussiano) — no determinista, no explotable
 - **3 perfiles de agresividad**: Conservador, Normal, Agresivo
 - **Fase 2 — Q-Learning**: 19.800 entradas de política óptima de descarte (330 × 4 posiciones × 15 máscaras, ~29.000 visitas por entrada)
-- **Probabilidades condicionadas a segundas dadas**: 64 configuraciones × 330 manos basadas en cuántas cartas guarda cada rival
+- **Probabilidades condicionadas a segundas dadas**: 84.480 filas (330 manos × 4 posiciones × 64 configs) basadas en cuántas cartas guarda cada rival
+- **Probabilidades ajustadas por posición**: Grande, Chica, Pares y Juego/Punto tienen en cuenta desempates según posición en la mesa (Mano gana todos, Postre pierde todos)
+- **Interfaz web completamente funcional**: Pestaña 1 (decisión de corte) y Pestaña 2 (política de descarte óptima) operativas
 
 ---
 
@@ -143,8 +145,10 @@ La máscara con mayor `reward_medio` es el descarte óptimo para esa mano y posi
 Una vez ejecutado el descarte, el número de cartas que guarda cada rival revela información probabilística sobre su mano. Este módulo calcula P(victoria en cada lance) condicionada a ese observable:
 
 - **64 configuraciones** por mano: `(n_guardadas_j2, n_guardadas_j3, n_guardadas_j4)` ∈ {1,2,3,4}³
-- **3.000 simulaciones Monte Carlo** por configuración × mano
-- **Salidas:** `probabilidades_segundas.csv` (330 × 64 filas) y `resumen_segundas.csv` (64 filas)
+- **4 posiciones** en la mesa (Mano, Intermedio izda., Intermedio dcha., Postre)
+- **3.000 simulaciones Monte Carlo** por configuración × mano × posición
+- **Salidas:** `probabilidades_segundas.csv` (84.480 filas: 330 × 4 × 64) y `resumen_segundas.csv` (256 filas: 4 × 64)
+- **Resultados clave**: pos. Mano P(pares)=59.7%, P(juego)=53.5%; pos. Postre P(pares)=58.2%, P(juego)=50.5%
 
 ```bash
 python3 calculadora_probabilidades_mus/probabilidades_segundas.py
@@ -167,6 +171,10 @@ El proyecto incluye una **interfaz web en Streamlit** que permite simular el mot
 python -m streamlit run demos/app.py
 ```
 
+**Pestaña 1 — Decisión de corte:** selecciona 4 cartas, posición y perfil → recomendación CORTAR/MUS con EV desglosado y probabilidades ajustadas por posición (desempates: Mano gana, Postre pierde).
+
+**Pestaña 2 — Política de descarte óptima:** consulta la Q-table de Fase 2 para tu mano y posición. Requiere `politicas_optimas_fase2.csv` (incluido en el repositorio).
+
 ---
 
 ## 📂 Estructura del Proyecto
@@ -184,13 +192,16 @@ Probabilidades-Mus/
 │   ├── sanity_check_ev.py               # Verificación de coherencia matemática
 │   ├── resultados_8reyes.csv            # 330 manos únicas precomputadas
 │   ├── politicas_optimas_fase2.csv      # Q-table completa (19.800 entradas)
-│   └── probabilidades_fase2.csv         # Probabilidades post-descarte
+│   ├── probabilidades_fase2.csv         # Probabilidades post-descarte
+│   ├── probabilidades_segundas.csv      # 84.480 filas (330 × 4 pos × 64 configs)
+│   └── resumen_segundas.csv             # 256 filas — resumen por posición × config
 │
 ├── 📁 docs/
 │   ├── FUNDAMENTOS_MATEMATICOS.md       # Formulación matemática completa
 │   ├── README_FASE2.md                  # Guía Q-Learning (Fase 2)
 │   ├── README_DECISION_CORTE.md         # Módulo de corte y hoja de ruta Mus Avanzado
 │   ├── CHANGELOG_v2.5.md                # Historial de cambios v2.5
+│   ├── CHANGELOG_v2.6.md                # Historial de cambios v2.6
 │   ├── DESEMPATES_MATEMATICOS.md        # Desempates por posición
 │   ├── ESTIMACION_N_MUESTRAL.md         # Cálculo de iteraciones necesarias
 │   └── TABLA_MAESTRA_EV.md              # Ranking completo de manos
@@ -251,7 +262,8 @@ pip install -r requirements.txt
 - [docs/README_FASE2.md](docs/README_FASE2.md) — Guía detallada de Q-Learning (Fase 2)
 - [docs/DESEMPATES_MATEMATICOS.md](docs/DESEMPATES_MATEMATICOS.md) — Desempates exactos por posición
 - [docs/TABLA_MAESTRA_EV.md](docs/TABLA_MAESTRA_EV.md) — Ranking completo de 330 manos por EV
-- [docs/CHANGELOG_v2.5.md](docs/CHANGELOG_v2.5.md) — Historial de cambios
+- [docs/CHANGELOG_v2.5.md](docs/CHANGELOG_v2.5.md) — Historial de cambios v2.5
+- [docs/CHANGELOG_v2.6.md](docs/CHANGELOG_v2.6.md) — Historial de cambios v2.6
 - [docs/README_DECISION_CORTE.md](docs/README_DECISION_CORTE.md) — **Módulo de decisión de corte**: estado actual, limitaciones y hoja de ruta hacia «Mus Avanzado» (calibración con maestros)
 
 ---
