@@ -536,7 +536,7 @@ def main():
             results = []
             with tqdm(total=len(worker_args), desc="Simulando", unit="cfg",
                       dynamic_ncols=True) as pbar:
-                for result in pool.imap_unordered(simular_config, worker_args, chunksize=64):
+                for result in pool.imap_unordered(simular_config, worker_args, chunksize=1):
                     results.append(result)
                     pbar.update(1)
     except Exception as e:
